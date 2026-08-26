@@ -1,0 +1,111 @@
+devices:
+  # ---------------------------------------------------------
+  # Sunton CYD 2.4" capacitive display
+  #
+  # ILI9341 SPI LCD
+  # CST820 I2C capacitive touch
+  # ---------------------------------------------------------
+
+  - name: display_lcd
+    type: display_lcd
+    sub_type: spi
+    chip: ili9341
+    version: 1.0.0
+
+    dependencies:
+      espressif/esp_lcd_ili9341: "*"
+
+    config:
+      swap_xy: false
+      mirror_y: false
+      mirror_x: false
+      x_max: 320
+      y_max: 240
+      invert_color: false
+      need_reset: false
+
+      io_spi_config:
+        cs_gpio_num: 15
+        dc_gpio_num: 2
+        spi_mode: 0
+        pclk_hz: 55000000
+        trans_queue_depth: 10
+        lcd_cmd_bits: 8
+        lcd_param_bits: 8
+        cs_ena_pretrans: 0
+        cs_ena_posttrans: 0
+
+        flags:
+          dc_high_on_cmd: false
+          dc_low_on_data: false
+          dc_low_on_param: false
+          octal_mode: false
+          quad_mode: false
+          sio_mode: false
+          psram_dma_direct: false
+          lsb_first: false
+          cs_high_active: false
+
+      lcd_panel_config:
+        reset_gpio_num: -1
+        rgb_ele_order: LCD_RGB_ELEMENT_ORDER_BGR
+        data_endian: LCD_RGB_DATA_ENDIAN_BIG
+        bits_per_pixel: 16
+
+        flags:
+          reset_active_high: false
+
+    peripherals:
+      - name: spi_master
+
+  # ---------------------------------------------------------
+  # CST820 capacitive touch
+  #
+  # BMGR's lcd_touch device currently exposes the generic
+  # I2C touch interface. The actual CST820 driver therefore
+  # requires the CST820 component to be selected by the
+  # BMGR device implementation/factory.
+  # ---------------------------------------------------------
+
+  - name: lcd_touch
+    type: lcd_touch
+    sub_type: i2c
+    chip: cst820
+    version: 1.0.0
+
+    dependencies:
+      viewesmart/esp_lcd_touch_cst820: "*"
+      espressif/esp_lcd_touch: "*"
+
+    config:
+      io_i2c_config:
+        control_phase_bytes: 1
+        dc_bit_offset: 0
+        lcd_cmd_bits: 8
+        lcd_param_bits: 0
+        scl_speed_hz: 400000
+        transaction_timeout_ms: 0
+
+        flags:
+          dc_low_on_data: false
+          disable_control_phase: true
+
+      touch_config:
+        x_max: 320
+        y_max: 240
+        rst_gpio_num: 25
+        int_gpio_num: 21
+
+        levels:
+          reset: 0
+          interrupt: 0
+
+        flags:
+          swap_xy: false
+          mirror_x: false
+          mirror_y: false
+
+    peripherals:
+      - name: i2c_master
+        i2c_addr:
+          - 0x2A

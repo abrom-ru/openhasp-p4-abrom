@@ -1,0 +1,21 @@
+peripherals:
+  - name: i2c_master
+    type: i2c
+    role: master
+    config:
+      port: 1
+      pins:
+        sda: 6
+        scl: 5
+      enable_internal_pullup: true
+
+  - name: spi_sd
+    type: spi
+    role: master
+    config:
+      spi_bus_config:
+        spi_port: 1
+        mosi_io_num: 40
+        miso_io_num: 38
+        sclk_io_num: 39
+        max_transfer_sz: 4000

@@ -1,0 +1,10 @@
+devices:
+  - name: display_lcd
+    config:
+      rgb_panel_config:
+        timings:
+          pclk_hz: 8000000
+          h_res: 480
+          v_res: 272
+          hsync_back_porch: 43
+          vsync_back_porch: 12

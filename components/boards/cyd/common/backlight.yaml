@@ -1,0 +1,19 @@
+peripherals:
+  # LCD BACKLIGHT CONTROL
+  - name: ledc_backlight
+    type: ledc
+    role: none
+    config:
+      # gpio_num: 21 or 27
+      freq_hz: 5000
+      duty: 0
+      duty_resolution: LEDC_TIMER_10_BIT
+      output_invert: true
+
+devices:
+  - name: lcd_brightness
+    type: ledc_ctrl
+    version: default
+    peripherals:
+      - name: ledc_backlight
+      

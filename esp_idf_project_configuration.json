@@ -1,0 +1,28 @@
+{
+  "wt32-sc01-plus-8mb": {
+    "build": {
+      "compileArgs": [],
+      "ninjaArgs": [],
+      "buildDirectoryPath": "build",
+      "sdkconfigDefaults": [],
+      "sdkconfigFilePath": ""
+    },
+    "env": {
+      "IDF_PRESET": "wt32-sc01-plus-8mb",
+      "BSP_BOARD": "wt32_sc01_plus"
+    }
+  },
+  "wt32-sc01-plus-16mb": {
+    "build": {
+      "compileArgs": [],
+      "ninjaArgs": [],
+      "buildDirectoryPath": "build",
+      "sdkconfigDefaults": [],
+      "sdkconfigFilePath": ""
+    },
+    "env": {
+      "IDF_PRESET": "wt32-sc01-plus-16mb",
+      "BSP_BOARD": "wt32_sc01_plus"
+    }
+  }
+}

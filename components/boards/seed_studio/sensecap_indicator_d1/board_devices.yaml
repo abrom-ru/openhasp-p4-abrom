@@ -1,0 +1,169 @@
+devices:
+
+  # -------------------------------------------
+  # SenseCAP Indicator D1 PCA9535 GPIO expander
+  # -------------------------------------------
+  - name: lcd_io_expander
+    type: gpio_expander
+    chip: pca9535
+
+    dependencies:
+      espressif/esp_io_expander_pca9535: "*"
+
+    config:
+      max_pins: 16
+      output_io_mask: [4, 5, 7]
+      output_io_level_mask: [1, 1, 1]
+      input_io_mask: NULL
+
+    peripherals:
+      - name: i2c_display
+        i2c_addr: [0x20]
+
+  # -------------------------------------------------
+  # SenseCAP Indicator D1 480x480 ST7701 RGB display
+  # -------------------------------------------------
+  - name: display_lcd
+    type: display_lcd
+    sub_type: rgb_3wire_spi
+    chip: st7701
+
+    dependencies:
+      espressif/esp_lcd_panel_io_additions: "*"
+      espressif/esp_lcd_st7701: "^2.0.0"
+
+    config:
+      swap_xy: false
+      mirror_x: false
+      mirror_y: false
+      invert_color: false
+      need_reset: false
+
+      bits_per_pixel: 16
+      rgb_ele_order: LCD_RGB_ELEMENT_ORDER_RGB
+      data_endian: LCD_RGB_DATA_ENDIAN_BIG
+
+      io_3wire_spi_config:
+        io_expander_name: lcd_io_expander
+
+        line_config:
+          cs_io_type: IO_TYPE_EXPANDER
+          cs_gpio_num: -1
+          cs_expander_pin: 4
+
+          scl_io_type: IO_TYPE_GPIO
+          scl_gpio_num: 41
+          scl_expander_pin: -1
+
+          sda_io_type: IO_TYPE_GPIO
+          sda_gpio_num: 48
+          sda_expander_pin: -1
+
+        expect_clk_speed: 500000
+        spi_mode: 0
+        lcd_cmd_bytes: 1
+        lcd_param_bytes: 1
+
+        flags:
+          use_dc_bit: true
+          dc_zero_on_data: false
+          lsb_first: false
+          cs_high_active: false
+          del_keep_cs_inactive: true
+
+      rgb_panel_config:
+        clk_src: LCD_CLK_SRC_DEFAULT
+        data_width: 16
+        
+        in_color_format: LCD_COLOR_FMT_RGB565
+        out_color_format: LCD_COLOR_FMT_RGB565
+
+        num_fbs: 1
+        fb_in_psram: true
+
+        hsync_gpio_num: 16
+        vsync_gpio_num: 17
+        de_gpio_num: 18
+        pclk_gpio_num: 21
+
+        data_gpio_nums:
+          - 15  # D0  = B0
+          - 14  # D1  = B1
+          - 13  # D2  = B2
+          - 12  # D3  = B3
+          - 11  # D4  = B4
+          - 10  # D5  = G0
+          - 9   # D6  = G1
+          - 8   # D7  = G2
+          - 7   # D8  = G3
+          - 6   # D9  = G4
+          - 5   # D10 = G5
+          - 4   # D11 = R0
+          - 3   # D12 = R1
+          - 2   # D13 = R2
+          - 1   # D14 = R3
+          - 0   # D15 = R4
+
+        timings:
+          pclk_hz: 18000000
+          h_res: 480
+          v_res: 480
+
+          hsync_pulse_width: 8
+          hsync_back_porch: 50
+          hsync_front_porch: 10
+
+          vsync_pulse_width: 8
+          vsync_back_porch: 20
+          vsync_front_porch: 10
+
+          flags:
+            hsync_idle_low: false
+            vsync_idle_low: false
+            de_idle_high: true
+            pclk_active_neg: false
+            pclk_idle_high: false
+
+      lcd_panel_config:
+        reset_gpio_num: -1   # handled by the LCD IO expander
+        rgb_ele_order: LCD_RGB_ELEMENT_ORDER_RGB
+        data_endian: LCD_RGB_DATA_ENDIAN_BIG
+        bits_per_pixel: 16
+        flags:
+          reset_active_high: false
+
+  # -------------------------------------------------
+  # SenseCAP Indicator D1 FT6336 touch controller
+  # -------------------------------------------------
+  - name: lcd_touch
+    type: lcd_touch
+    sub_type: i2c
+    chip: ft5x06
+
+    dependencies:
+      espressif/esp_lcd_touch_ft5x06: "*"
+
+    config:
+      io_i2c_config:
+        lcd_cmd_bits: 8
+        scl_speed_hz: 400000
+
+      touch_config:
+        x_max: 480
+        y_max: 480
+
+        rst_gpio_num: -1  # handled by the LCD IO expander
+        int_gpio_num: -1  # handled by the LCD IO expander
+
+        levels:
+          reset: 0
+          interrupt: 0
+
+        flags:
+          swap_xy: false
+          mirror_x: true
+          mirror_y: true
+
+    peripherals:
+      - name: touch_i2c
+          - 0x90

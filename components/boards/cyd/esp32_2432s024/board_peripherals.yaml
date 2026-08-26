@@ -1,0 +1,25 @@
+peripherals:
+  # ---------------------------------------------------------
+  # SPI master for ILI9341 display
+  # ---------------------------------------------------------
+  - name: spi_master
+    type: spi
+    role: master
+    config:
+      spi_bus_config:
+        spi_port: SPI1_HOST
+        miso_io_num: 12
+        mosi_io_num: 13
+        sclk_io_num: 14
+
+  # ---------------------------------------------------------
+  # I2C master for CST820 touch
+  # ---------------------------------------------------------
+  - name: i2c_master
+    type: i2c
+    role: master
+    config:
+      port: I2C_NUM_0
+      pins:
+        sda: 33
+        scl: 32

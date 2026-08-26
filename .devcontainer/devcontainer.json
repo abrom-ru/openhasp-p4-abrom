@@ -1,0 +1,25 @@
+{
+	"name": "ESP-IDF Development",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"args": {
+            "DOCKER_TAG": "latest"
+        }
+	},
+	"containerEnv": {
+        "IDF_EXTRA_ACTIONS_PATH": "/workspaces/sample_project/managed_components/espressif__esp_board_manager"
+    },
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash",
+				"idf.gitPath": "/usr/bin/git"
+			},
+			"extensions": [
+				"espressif.esp-idf-extension",
+				"espressif.esp-idf-web"
+			]
+		}
+	},
+	"runArgs": [ "--privileged", "--device=/dev/ttyACM0:/dev/ttyACM0" ]
+}

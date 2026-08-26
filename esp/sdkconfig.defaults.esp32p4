@@ -1,0 +1,12 @@
+# ============================================================
+# ESP32-P4
+# ============================================================
+
+# LVGL software rendering
+CONFIG_LV_DRAW_SW_DRAW_UNIT_CNT=2
+
+# PSRAM
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+
+CONFIG_CACHE_L2_CACHE_256KB=y
+CONFIG_CACHE_L2_CACHE_LINE_128B=y

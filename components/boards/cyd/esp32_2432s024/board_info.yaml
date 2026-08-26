@@ -1,0 +1,5 @@
+board: esp32_2432s024
+chip: esp32
+version: "1.0.0"
+description: "2.4-inch ESP32 TFT board with ILI9341 and CST820 capacitive touch"
+manufacturer: "Sunton"

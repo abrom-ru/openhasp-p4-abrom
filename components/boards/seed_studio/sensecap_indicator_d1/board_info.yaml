@@ -1,0 +1,5 @@
+board: sensecap_indicator_d1
+chip: esp32s3
+version: "1.0.0"
+description: "Seeed Studio SenseCAP Indicator D1, 4-inch 480x480 touch display"
+manufacturer: "Seeed Studio"

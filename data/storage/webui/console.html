@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+
+  <title>HASP Console</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #111;
+      color: #ddd;
+      font-family: monospace;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #input {
+      width: 100%;
+      padding: 12px;
+      border: 0;
+      border-top: 1px solid #333;
+      outline: none;
+      background: #222;
+      color: #fff;
+      font: inherit;
+      font-size: 16px;
+    }
+
+    #input:focus {
+      background: #292929;
+    }
+
+    .system {
+      color: #888;
+    }
+
+    .error {
+      color: #f66;
+    }
+
+    .input {
+      color: #6cf;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="output"></div>
+
+  <input
+    id="input"
+    type="text"
+    placeholder="Enter command..."
+    autocomplete="off"
+    spellcheck="false"
+  >
+
+<script>
+"use strict";
+
+const output = document.getElementById("output");
+const input  = document.getElementById("input");
+
+let ws = null;
+
+function log(text, className = "") {
+  const line = document.createElement("div");
+
+  if (className) {
+    line.className = className;
+  }
+
+  line.textContent = text;
+  output.appendChild(line);
+
+  output.scrollTop = output.scrollHeight;
+}
+
+function connect() {
+  // Same host that served this page.
+  // This also automatically works when the ESP32's IP changes.
+  const scheme = location.protocol === "https:" ? "wss" : "ws";
+  const url = `${scheme}://${location.host}/ws`;
+
+  log(`Connecting to ${url}...`, "system");
+
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    log("WebSocket connected", "system");
+    input.disabled = false;
+    input.focus();
+  };
+
+  ws.onmessage = (event) => {
+    // For now we're assuming the ESP32 sends text frames.
+    log(event.data);
+  };
+
+  ws.onerror = () => {
+    log("WebSocket error", "error");
+  };
+
+  ws.onclose = () => {
+    log("WebSocket disconnected", "system");
+
+    input.disabled = true;
+
+    // Automatically reconnect.
+    setTimeout(connect, 2000);
+  };
+}
+
+input.disabled = true;
+
+input.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") {
+    return;
+  }
+
+  const text = input.value;
+
+  if (!text) {
+    return;
+  }
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    log("Not connected", "error");
+    return;
+  }
+
+  // Show what we sent.
+  log("> " + text, "input");
+
+  ws.send(text);
+
+  input.value = "";
+});
+
+connect();
+</script>
+
+</body>
+</html>

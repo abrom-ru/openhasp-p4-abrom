@@ -1,0 +1,31 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "wt32-sc01-plus-8mb",
+      "displayName": "WT32-SC01 Plus - 8MB",
+      "binaryDir": "build/wt32-sc01-plus-8mb",
+      "cacheVariables": {
+        "IDF_TARGET": "esp32s3",
+        "SDKCONFIG": "build/sdkconfig.wt32-sc01-plus-8mb",
+        "SDKCONFIG_DEFAULTS": "esp/sdkconfig.defaults;components/gen_bmgr_codes/board_manager.defaults;esp/sdkconfig.defaults.esp32s3;esp/partitions/sdkconfig.defaults.8mb"
+      },
+      "environment": {
+        "BSP_BOARD": "wt32_sc01_plus"
+      }
+    },
+    {
+      "name": "wt32-sc01-plus-16mb",
+      "displayName": "WT32-SC01 Plus - 16MB",
+      "binaryDir": "build/wt32-sc01-plus-16mb",
+      "cacheVariables": {
+        "IDF_TARGET": "esp32s3",
+        "SDKCONFIG": "build/sdkconfig.wt32-sc01-plus-16mb",
+        "SDKCONFIG_DEFAULTS": "esp/sdkconfig.defaults;components/gen_bmgr_codes/board_manager.defaults;esp/sdkconfig.defaults.esp32s3;esp/partitions/sdkconfig.defaults.16mb"
+      },
+      "environment": {
+        "BSP_BOARD": "wt32_sc01_plus"
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+devices:
+  - name: ledc_backlight
+  - name: display_lcd
+    config:
+      rgb_panel_config:
+        timings:
+          pclk_hz: 12500000

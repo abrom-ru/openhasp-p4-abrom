@@ -1,0 +1,23 @@
+# ---------------------------------------------------------
+# Shared TF / SD card SPI and filesystem configuration
+# ---------------------------------------------------------
+
+devices:
+  - name: fs_fat
+    type: fs_fat
+    version: "1.0.0"
+    sub_type: spi
+
+    config:
+      mount_point: "/sdcard"
+
+      vfs_config:
+        format_if_mount_failed: false
+        max_files: 5
+        allocation_unit_size: 16384
+
+      sub_config:
+        cs_gpio_num: 10
+
+    peripherals:
+      - name: spi_master

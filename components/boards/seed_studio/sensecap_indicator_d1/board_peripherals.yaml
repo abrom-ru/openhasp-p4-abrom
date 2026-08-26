@@ -1,0 +1,18 @@
+peripherals:
+  - name: i2c_display
+    type: i2c
+    role: master
+    config:
+      port: 1
+      pins:
+        sda: 39
+        scl: 40
+
+  - name: touch_i2c
+    type: i2c
+    role: master
+    config:
+      port: 1
+      pins:
+        sda: 39
+        scl: 40

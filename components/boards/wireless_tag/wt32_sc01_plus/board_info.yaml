@@ -1,0 +1,5 @@
+board: wt32_sc01_plus
+chip: esp32s3
+version: "1.0.0"
+description: "WT32-SC01 Plus 3.5-inch 320x480 ESP32-S3 board"
+manufacturer: "Wireless-Tag"

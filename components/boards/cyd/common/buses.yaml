@@ -1,0 +1,26 @@
+peripherals:
+  # ---------------------------------------------------------
+  # Common I2C master
+  # ---------------------------------------------------------
+  - name: i2c_master
+    type: i2c
+    role: master
+    config:
+      port: I2C_NUM_0
+      pins:
+        sda: 19
+        scl: 20
+
+  # ---------------------------------------------------------
+  # Common SPI master for TF/SD/XPT
+  # ---------------------------------------------------------
+  - name: spi_master
+    type: spi
+    role: master
+    config:
+      spi_bus_config:
+        spi_port: SPI1_HOST
+        mosi_io_num: 11
+        miso_io_num: 13
+        sclk_io_num: 12
+        max_transfer_sz: 6400

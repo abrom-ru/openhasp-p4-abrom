@@ -1,0 +1,12 @@
+# ============================================================
+# PSRAM Hardware
+# ============================================================
+
+# SenseCAP Indicator D1 uses Octal PSRAM.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_TYPE_AUTO=y
+
+# SenseCAP's working configuration requires 120 MHz PSRAM.
+CONFIG_SPIRAM_SPEED_120M=y
+CONFIG_SPIRAM_SPEED=120

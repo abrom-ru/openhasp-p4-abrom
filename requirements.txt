@@ -1,0 +1,2 @@
+esp-bmgr-assist>=0.8.3
+filelock>=3.32.3

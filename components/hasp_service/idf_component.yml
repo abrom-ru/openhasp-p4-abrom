@@ -1,0 +1,5 @@
+dependencies:
+  idf:
+    version: ">=5.0"
+description: Base service class with NVS-backed configuration for openHASP
+version: "0.1.0"

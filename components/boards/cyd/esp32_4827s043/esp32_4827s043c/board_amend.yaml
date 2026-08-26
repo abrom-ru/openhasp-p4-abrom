@@ -1,0 +1,11 @@
+version: "1.0"
+description: "ESP32-8048S043C common hardware modules"
+
+apply:
+  - ../../common/buses.yaml
+  - ../../common/rgb.yaml
+  - ../../common/panel/st7262.yaml
+  - ../../common/touch/gt911.yaml
+  - ../../common/backlight.yaml
+  - ../../common/sd.yaml
+  - lcd.yaml  # Override the default display_lcd device parameters for this board, since it has a different resolution and timing than the default.

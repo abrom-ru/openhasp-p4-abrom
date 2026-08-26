@@ -1,0 +1,39 @@
+# ST7262 800x480 RGB565 panel profile.
+#
+# The BMGR display_lcd/rgb implementation is generic_rgb.
+# This fragment supplies the panel-specific timing defaults that
+# are common to the Sunton 8048S043C/050C family.
+#
+# pclk_hz is intentionally NOT specified here:
+#   8048S043C = 12.5 MHz
+#   8048S050C = 16 MHz
+#
+devices:
+  - name: display_lcd
+    type: display_lcd
+    config:
+      bits_per_pixel: 16
+      rgb_ele_order: LCD_RGB_ELEMENT_ORDER_RGB
+      data_endian: LCD_RGB_DATA_ENDIAN_BIG
+
+      rgb_panel_config:
+        data_width: 16
+
+        timings:
+          h_res: 800
+          v_res: 480
+
+          hsync_pulse_width: 4
+          hsync_back_porch: 8
+          hsync_front_porch: 8
+
+          vsync_pulse_width: 4
+          vsync_back_porch: 8
+          vsync_front_porch: 8
+
+          flags:
+            hsync_idle_low: false
+            vsync_idle_low: false
+            de_idle_high: false
+            pclk_active_neg: true
+            pclk_idle_high: false

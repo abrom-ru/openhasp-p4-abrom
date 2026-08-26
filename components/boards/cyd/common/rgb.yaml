@@ -1,0 +1,86 @@
+# ---------------------------------------------------------
+# Shared 800x480 RGB16 display
+# ---------------------------------------------------------
+
+devices:
+  - name: display_lcd
+    type: display_lcd
+    version: "1.0.0"
+    sub_type: rgb
+    chip: generic_rgb
+
+    config:
+      swap_xy: false
+      mirror_x: false
+      mirror_y: false
+      invert_color: false
+      need_reset: true
+
+      bits_per_pixel: 16
+      rgb_ele_order: LCD_RGB_ELEMENT_ORDER_RGB
+      data_endian: LCD_RGB_DATA_ENDIAN_BIG
+
+      rgb_panel_config:
+        clk_src: LCD_CLK_SRC_PLL160M
+        data_width: 16
+
+        in_color_format: LCD_COLOR_FMT_RGB565
+        out_color_format: LCD_COLOR_FMT_RGB565
+
+        num_fbs: 1
+        bounce_buffer_size_px: 0
+        dma_burst_size: 64
+
+        hsync_gpio_num: 39
+        vsync_gpio_num: 41
+        de_gpio_num: 40
+        pclk_gpio_num: 42
+        disp_gpio_num: -1
+
+        data_gpio_nums:
+          - 8
+          - 3
+          - 46
+          - 9
+          - 1
+          - 5
+          - 6
+          - 7
+          - 15
+          - 16
+          - 4
+          - 45
+          - 48
+          - 47
+          - 21
+          - 14
+
+        user_fbs_func: ""
+
+        timings:
+          pclk_hz: 12500000
+          h_res: 800
+          v_res: 480
+
+          hsync_pulse_width: 4
+          hsync_back_porch: 8
+          hsync_front_porch: 8
+
+          vsync_pulse_width: 4
+          vsync_back_porch: 8
+          vsync_front_porch: 8
+
+          flags:
+            hsync_idle_low: false
+            vsync_idle_low: false
+            de_idle_high: false
+            pclk_active_neg: true
+            pclk_idle_high: false
+
+        flags:
+          disp_active_low: false
+          refresh_on_demand: false
+          fb_in_psram: true
+          double_fb: false
+          no_fb: false
+          bb_invalidate_cache: false

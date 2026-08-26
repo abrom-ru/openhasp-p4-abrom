@@ -1,0 +1,46 @@
+# ============================================================
+# LVGL
+# ============================================================
+
+CONFIG_FREERTOS_HZ=1000
+CONFIG_LV_USE_OS=LV_OS_FREERTOS
+CONFIG_LV_OS_FREERTOS=y
+
+CONFIG_LV_USE_CLIB_MALLOC=y
+CONFIG_LV_USE_CLIB_STRING=y
+CONFIG_LV_USE_CLIB_SPRINTF=y
+
+CONFIG_LV_DEF_REFR_PERIOD=33
+
+CONFIG_LV_OBJ_STYLE_CACHE=y
+
+CONFIG_LV_USE_LOG=y
+CONFIG_LV_LOG_LEVEL=LV_LOG_LEVEL_INFO
+CONFIG_LV_LOG_PRINTF=n
+
+CONFIG_LV_USE_FREETYPE=y
+
+# Performance
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+CONFIG_LV_USE_SYSMON=y
+# CONFIG_LV_USE_PERF_MONITOR=y
+CONFIG_LV_USE_OBSERVER=y
+
+# ============================================================
+# LVGL Adapter
+# ============================================================
+
+# CONFIG_ESP_LVGL_ADAPTER_ENABLE_FPS_STATS=y
+CONFIG_ESP_LVGL_ADAPTER_ENABLE_FS=y
+CONFIG_ESP_LVGL_ADAPTER_ENABLE_DECODER=y
+CONFIG_ESP_LVGL_ADAPTER_ENABLE_FREETYPE=y
+CONFIG_ESP_LVGL_ADAPTER_FREETYPE_MINIMAL_BUILD=y
+CONFIG_ESP_LVGL_ADAPTER_FREETYPE_SMALL_RENDER_POOL=y
+
+# ============================================================
+# HTTP + WS
+# ============================================================
+
+CONFIG_HTTPD_WS_SUPPORT=y
+CONFIG_HTTPD_WS_PRE_HANDSHAKE_CB_SUPPORT=y

@@ -1,0 +1,15 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+        "label": "Rebuild BSP Board Configuration",
+        "type": "shell",
+        "command": "idf.py bmgr -b ${env:BSP_BOARD}"
+        },
+        {
+        "label": "List available boards",
+        "type": "shell",
+        "command": "idf.py bmgr -l"
+        }
+    ]
+}
