@@ -1,0 +1,24 @@
+menu "Board LVGL adapter integration"
+
+config BOARD_LVGL_USE_DSI
+    bool "Enable MIPI DSI display path"
+    default n
+    help
+        Compile the MIPI DSI branch in board_lvgl.c. Required for boards
+        whose display_lcd device declares sub_type: dsi.
+
+config BOARD_LVGL_USE_RGB
+    bool "Enable RGB display path"
+    default n
+    help
+        Compile the parallel RGB branch in board_lvgl.c. Required for boards
+        whose display_lcd device declares sub_type: rgb.
+
+config BOARD_LVGL_USE_RGB_3WIRE_SPI
+    bool "Enable RGB + 3-wire SPI display path"
+    default n
+    help
+        Compile the RGB-over-3-wire-SPI branch in board_lvgl.c. Required for
+        boards whose display_lcd device declares sub_type: rgb_3wire_spi.
+
+endmenu

@@ -1,0 +1,5 @@
+board: jc1060p470c
+chip: esp32p4
+version: default
+description: "Guition JC1060P470C_I_W_Y 7-inch 1024x600 MIPI-DSI ESP32-P4 board"
+manufacturer: "Guition"

@@ -77,3 +77,13 @@ Desktop.ini
 *.workspace # General workspace files, can be from various tools
 *.suo       # Visual Studio Solution User Options
 *.sln.docstates # Visual Studio
+
+# Guition factory reference dumps (schematics, demo source, factory bins).
+# Kept locally as reference material only; not committed — hundreds of MB.
+/JC1060P470C_I_W/
+/JC1060P470C_I_W_Y/
+
+# Local scratch / not part of project
+/i2c_scanner/
+/.claude/
+/%SystemDrive%/

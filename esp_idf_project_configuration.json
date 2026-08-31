@@ -24,5 +24,18 @@
       "IDF_PRESET": "wt32-sc01-plus-16mb",
       "BSP_BOARD": "wt32_sc01_plus"
     }
+  },
+  "guition-jc1060p470c-16mb": {
+    "build": {
+      "compileArgs": [],
+      "ninjaArgs": [],
+      "buildDirectoryPath": "build",
+      "sdkconfigDefaults": [],
+      "sdkconfigFilePath": ""
+    },
+    "env": {
+      "IDF_PRESET": "guition-jc1060p470c-16mb",
+      "BSP_BOARD": "jc1060p470c"
+    }
   }
 }

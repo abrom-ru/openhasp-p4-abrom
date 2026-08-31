@@ -1,24 +1,62 @@
 # ============================================================
-# LVGL
+# LVGL  —  aligned with factory Guition lvgl_demo_v9 sdkconfig
+# (JC1060P470C_I_W/1-Demo/Demo_IDF/examples/lvgl_demo_v9/sdkconfig).
+# Only the entries that factory sets explicitly are pinned here.
 # ============================================================
 
 CONFIG_FREERTOS_HZ=1000
+
+# Skip lv_conf.h — Kconfig is the single source of truth (matches factory).
+CONFIG_LV_CONF_SKIP=y
+
+# Color depth MUST match the DPI panel input format (RGB565 = 16bpp).
+# LVGL 9 defaults to 32bpp if left unset — that produces garbage/black
+# against a RGB565 framebuffer.
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_COLOR_DEPTH=16
+
+# OS
 CONFIG_LV_USE_OS=LV_OS_FREERTOS
 CONFIG_LV_OS_FREERTOS=y
+CONFIG_LV_USE_FREERTOS_TASK_NOTIFY=y
 
+# CLib
 CONFIG_LV_USE_CLIB_MALLOC=y
 CONFIG_LV_USE_CLIB_STRING=y
 CONFIG_LV_USE_CLIB_SPRINTF=y
 
-CONFIG_LV_DEF_REFR_PERIOD=33
+# Refresh cadence (factory = 15 ms ≈ 67 Hz timer; our old 33 ms was slower)
+CONFIG_LV_DEF_REFR_PERIOD=15
+CONFIG_LV_DPI_DEF=130
+
+# Draw backend — SW renderer with RGB565 path enabled.
+# Without LV_DRAW_SW / RGB565 support LVGL has no code path to render
+# into our framebuffer format at all.
+CONFIG_LV_USE_DRAW_SW=y
+CONFIG_LV_DRAW_SW_SUPPORT_RGB565=y
+CONFIG_LV_DRAW_SW_DRAW_UNIT_CNT=2
+CONFIG_LV_DRAW_BUF_STRIDE_ALIGN=1
+CONFIG_LV_DRAW_BUF_ALIGN=4
+CONFIG_LV_DRAW_THREAD_STACK_SIZE=8192
+CONFIG_LV_DRAW_LAYER_SIMPLE_BUF_SIZE=24576
+
+# Factory sets LV_ATTRIBUTE_FAST_MEM_USE_IRAM=y, but LVGL 9.5 declares the
+# same helper in two different .iram1.N sections and our global -Werror
+# turns that into a build failure. Disabled here — only a perf opt.
+# CONFIG_LV_ATTRIBUTE_FAST_MEM_USE_IRAM=y
+
+# Cache off (factory: LV_CACHE_DEF_SIZE=0)
+CONFIG_LV_CACHE_DEF_SIZE=0
 
 CONFIG_LV_OBJ_STYLE_CACHE=y
 
+# Logging
 CONFIG_LV_USE_LOG=y
 CONFIG_LV_LOG_LEVEL=LV_LOG_LEVEL_INFO
 CONFIG_LV_LOG_PRINTF=n
 
-CONFIG_LV_USE_FREETYPE=y
+# FreeType/ThorVG disabled (matches factory).
+CONFIG_LV_USE_FREETYPE=n
 
 # Performance
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
@@ -26,17 +64,6 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 CONFIG_LV_USE_SYSMON=y
 # CONFIG_LV_USE_PERF_MONITOR=y
 CONFIG_LV_USE_OBSERVER=y
-
-# ============================================================
-# LVGL Adapter
-# ============================================================
-
-# CONFIG_ESP_LVGL_ADAPTER_ENABLE_FPS_STATS=y
-CONFIG_ESP_LVGL_ADAPTER_ENABLE_FS=y
-CONFIG_ESP_LVGL_ADAPTER_ENABLE_DECODER=y
-CONFIG_ESP_LVGL_ADAPTER_ENABLE_FREETYPE=y
-CONFIG_ESP_LVGL_ADAPTER_FREETYPE_MINIMAL_BUILD=y
-CONFIG_ESP_LVGL_ADAPTER_FREETYPE_SMALL_RENDER_POOL=y
 
 # ============================================================
 # HTTP + WS

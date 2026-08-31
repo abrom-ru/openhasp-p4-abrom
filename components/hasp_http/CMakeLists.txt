@@ -10,3 +10,8 @@ idf_component_register(
             bblanchon__arduinojson
             esp_hw_support
 )
+
+target_compile_options(${COMPONENT_LIB} PRIVATE
+    -Wno-error=missing-field-initializers
+    -Wno-error=unused-variable
+)

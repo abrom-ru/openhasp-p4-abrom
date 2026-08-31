@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: MIT
  *
- * BMGR -> LVGL adapter integration.
+ * BMGR -> LVGL port integration.
  *
  * The "lvgl" BMGR custom device describes mappings:
  *
@@ -10,6 +10,8 @@
  *   ...
  *
  * The physical LCD/touch devices themselves are initialized by BMGR.
+ * This layer wraps them with the espressif/esp_lvgl_port managed component
+ * (same one the factory Guition Demo_IDF BSP uses).
  */
 
 #include "board_lvgl.h"
@@ -20,10 +22,12 @@
 #include <string.h>
 
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 
 #include "esp_board_manager.h"
-#include "esp_lv_adapter.h"
+#include "esp_lvgl_port.h"
+#include "lvgl.h"
 
 #include "dev_display_lcd.h"
 #include "dev_lcd_touch.h"
@@ -37,47 +41,51 @@ static const char *TAG = "board_lvgl";
 
 
 /*
- * Convert the board YAML's integer rotation into the adapter enum.
- *
- * Keep this mapping here rather than putting esp_lv_adapter types into
- * the BMGR-generated configuration structure.
+ * Build the common lvgl_port_display_cfg_t shared across bus types.
  */
-static esp_lv_adapter_rotation_t board_lvgl_rotation_from_degrees(int16_t degrees)
+static lvgl_port_display_cfg_t board_lvgl_build_disp_cfg(
+    const dev_display_lcd_handles_t *lcd,
+    const dev_display_lcd_config_t *lcd_cfg,
+    const dev_custom_lvgl_displays_t *policy)
 {
-    switch (degrees) {
-    case 0:
-        return ESP_LV_ADAPTER_ROTATE_0;
+    (void)policy;
 
-    case 90:
-        return ESP_LV_ADAPTER_ROTATE_90;
+    lvgl_port_display_cfg_t disp_cfg = {
+        .io_handle     = lcd->io_handle,
+        .panel_handle  = lcd->panel_handle,
+        .control_handle = NULL,
+        .buffer_size   = (uint32_t)lcd_cfg->lcd_width * (uint32_t)policy->buffer_height,
+        .double_buffer = policy->double_buffer,
+        .hres          = lcd_cfg->lcd_width,
+        .vres          = lcd_cfg->lcd_height,
+        .monochrome    = false,
+        .rotation = {
+            .swap_xy  = false,
+            .mirror_x = false,
+            .mirror_y = false,
+        },
+#if LVGL_VERSION_MAJOR >= 9
+        .color_format = LV_COLOR_FORMAT_RGB565,
+#endif
+        .flags = {
+            // Factory lvgl_demo_v9 main.c: .buff_dma=true, .buff_spiram=false,
+            // .sw_rotate=false. use_psram in yaml lets user override for boards
+            // where the draw buffer won't fit in internal SRAM.
+            .buff_dma    = !policy->use_psram,
+            .buff_spiram = policy->use_psram,
+#if LVGL_VERSION_MAJOR >= 9
+            .swap_bytes  = false,
+#endif
+            .sw_rotate   = false,
+        },
+    };
 
-    case 180:
-        return ESP_LV_ADAPTER_ROTATE_180;
-
-    case 270:
-        return ESP_LV_ADAPTER_ROTATE_270;
-
-    default:
-        ESP_LOGE(TAG, "Unsupported LVGL rotation: %d", degrees);
-        return ESP_LV_ADAPTER_ROTATE_0;
-    }
+    return disp_cfg;
 }
 
 
 /*
- * Register one BMGR LCD device with esp_lv_adapter.
- *
- * This is intentionally very close to Espressif's BMGR LVGL example:
- *
- *   display_lcd config
- *       |
- *       +-- SPI / I80 / PARLIO
- *       +-- RGB
- *       +-- RGB 3-wire SPI
- *       +-- DSI
- *
- * The LVGL policy supplies the buffer/rotation settings that are specific
- * to this LVGL display instance.
+ * Register one BMGR LCD device with esp_lvgl_port.
  */
 static lv_display_t *board_lvgl_register_display(
     const dev_display_lcd_handles_t *lcd,
@@ -88,13 +96,11 @@ static lv_display_t *board_lvgl_register_display(
     assert(lcd_cfg != NULL);
     assert(policy != NULL);
 
-    const esp_lv_adapter_rotation_t rotation =
-        board_lvgl_rotation_from_degrees(policy->rotation);
+    lvgl_port_display_cfg_t disp_cfg =
+        board_lvgl_build_disp_cfg(lcd, lcd_cfg, policy);
 
     /*
-     * SPI/I80/PARLIO use the "OTHER" adapter path.
-     *
-     * This is also the path used by the adapter for SPI/I2C/I80/QSPI.
+     * SPI / I80 / PARLIO — generic path.
      */
     if (strcmp(lcd_cfg->sub_type,
                ESP_BOARD_DEVICE_LCD_SUB_TYPE_SPI) == 0 ||
@@ -103,153 +109,67 @@ static lv_display_t *board_lvgl_register_display(
         strcmp(lcd_cfg->sub_type,
                ESP_BOARD_DEVICE_LCD_SUB_TYPE_PARLIO) == 0) {
 
-        esp_lv_adapter_display_config_t disp_cfg;
-
-        if (policy->use_psram) {
-            disp_cfg =
-                ESP_LV_ADAPTER_DISPLAY_SPI_WITH_PSRAM_DEFAULT_CONFIG(
-                    lcd->panel_handle,
-                    lcd->io_handle,
-                    lcd_cfg->lcd_width,
-                    lcd_cfg->lcd_height,
-                    rotation);
-        } else {
-            disp_cfg =
-                ESP_LV_ADAPTER_DISPLAY_SPI_WITHOUT_PSRAM_DEFAULT_CONFIG(
-                    lcd->panel_handle,
-                    lcd->io_handle,
-                    lcd_cfg->lcd_width,
-                    lcd_cfg->lcd_height,
-                    rotation);
-        }
-
-        /*
-         * Override the adapter's default buffer policy with the board
-         * policy.
-         */
-        disp_cfg.profile.buffer_height = policy->buffer_height;
-        disp_cfg.profile.require_double_buffer = policy->double_buffer;
-        disp_cfg.profile.use_psram = policy->use_psram;
-
-        /*
-         * OTHER interfaces only support NONE tearing avoidance.
-         */
-        disp_cfg.tear_avoid_mode =
-            ESP_LV_ADAPTER_TEAR_AVOID_MODE_NONE;
-
-        return esp_lv_adapter_register_display(&disp_cfg);
+        return lvgl_port_add_disp(&disp_cfg);
     }
 
-
     /*
-     * RGB panel.
+     * RGB parallel — needs the extra rgb cfg.
      */
     if (strcmp(lcd_cfg->sub_type,
-               ESP_BOARD_DEVICE_LCD_SUB_TYPE_RGB) == 0) {
-
-#if CONFIG_BOARD_LVGL_USE_RGB
-
-        esp_lv_adapter_display_config_t disp_cfg =
-            ESP_LV_ADAPTER_DISPLAY_RGB_DEFAULT_CONFIG(
-                lcd->panel_handle,
-                lcd->io_handle,
-                lcd_cfg->lcd_width,
-                lcd_cfg->lcd_height,
-                rotation);
-
-        disp_cfg.profile.buffer_height = policy->buffer_height;
-        disp_cfg.profile.require_double_buffer = policy->double_buffer;
-        disp_cfg.profile.use_psram = policy->use_psram;
-
-        return esp_lv_adapter_register_display(&disp_cfg);
-
-#else
-
-        ESP_LOGE(TAG,
-                 "LCD '%s' is RGB, but "
-                 "CONFIG_BOARD_LVGL_USE_RGB is disabled",
-                 policy->lcd);
-        return NULL;
-
-#endif
-    }
-
-
-    /*
-     * RGB panel controlled through 3-wire SPI.
-     *
-     * The adapter treats this as the RGB display path.
-     */
-    if (strcmp(lcd_cfg->sub_type,
+               ESP_BOARD_DEVICE_LCD_SUB_TYPE_RGB) == 0 ||
+        strcmp(lcd_cfg->sub_type,
                ESP_BOARD_DEVICE_LCD_SUB_TYPE_RGB_3WIRE_SPI) == 0) {
 
-#if CONFIG_BOARD_LVGL_USE_RGB_3WIRE_SPI
-
-        esp_lv_adapter_display_config_t disp_cfg =
-            ESP_LV_ADAPTER_DISPLAY_RGB_DEFAULT_CONFIG(
-                lcd->panel_handle,
-                lcd->io_handle,
-                lcd_cfg->lcd_width,
-                lcd_cfg->lcd_height,
-                rotation);
-
-        disp_cfg.profile.buffer_height = policy->buffer_height;
-        disp_cfg.profile.require_double_buffer = policy->double_buffer;
-        disp_cfg.profile.use_psram = policy->use_psram;
-
-        return esp_lv_adapter_register_display(&disp_cfg);
-
+#if CONFIG_BOARD_LVGL_USE_RGB || CONFIG_BOARD_LVGL_USE_RGB_3WIRE_SPI
+        const lvgl_port_display_rgb_cfg_t rgb_cfg = {
+            .flags = {
+                .bb_mode      = false,
+                .avoid_tearing = false,
+            },
+        };
+        return lvgl_port_add_disp_rgb(&disp_cfg, &rgb_cfg);
 #else
-
         ESP_LOGE(TAG,
-                 "LCD '%s' is RGB 3-wire SPI, but "
-                 "CONFIG_BOARD_LVGL_USE_RGB_3WIRE_SPI is disabled",
+                 "LCD '%s' is RGB but RGB support is disabled",
                  policy->lcd);
         return NULL;
-
 #endif
     }
 
-
     /*
-     * MIPI DSI.
+     * MIPI DSI — factory Guition path.
      */
     if (strcmp(lcd_cfg->sub_type,
                ESP_BOARD_DEVICE_LCD_SUB_TYPE_DSI) == 0) {
 
 #if CONFIG_BOARD_LVGL_USE_DSI
+        // Match Guition JC1060P470C_I_W_Y "New Panel" demo
+        // (lvgl_demo_v9/main/main.c bsp_display_cfg_t): the app overrides the
+        // BSP defaults with buff_dma=false, buff_spiram=false, sw_rotate=true.
+        // These are the flags that produced the confirmed-working image.
+        disp_cfg.flags.buff_dma    = false;
+        disp_cfg.flags.buff_spiram = false;
+        disp_cfg.flags.sw_rotate   = true;
 
-        esp_lv_adapter_display_config_t disp_cfg =
-            ESP_LV_ADAPTER_DISPLAY_MIPI_DEFAULT_CONFIG(
-                lcd->panel_handle,
-                lcd->io_handle,
-                lcd_cfg->lcd_width,
-                lcd_cfg->lcd_height,
-                rotation);
-
-        disp_cfg.profile.buffer_height = policy->buffer_height;
-        disp_cfg.profile.require_double_buffer = policy->double_buffer;
-        disp_cfg.profile.use_psram = policy->use_psram;
-
-        return esp_lv_adapter_register_display(&disp_cfg);
-
+        const lvgl_port_display_dsi_cfg_t dpi_cfg = {
+            .flags = {
+                .avoid_tearing = false,
+            },
+        };
+        return lvgl_port_add_disp_dsi(&disp_cfg, &dpi_cfg);
 #else
-
         ESP_LOGE(TAG,
-                 "LCD '%s' is MIPI DSI, but "
+                 "LCD '%s' is MIPI DSI but "
                  "CONFIG_BOARD_LVGL_USE_DSI is disabled",
                  policy->lcd);
         return NULL;
-
 #endif
     }
-
 
     ESP_LOGE(TAG,
              "LCD '%s' has unsupported subtype '%s'",
              policy->lcd,
              lcd_cfg->sub_type);
-
     return NULL;
 }
 
@@ -264,9 +184,6 @@ static esp_err_t board_lvgl_register_touch(
     assert(policy != NULL);
     assert(display != NULL);
 
-    /*
-     * An empty touch mapping means "this display has no touch".
-     */
     if (policy->touch == NULL || policy->touch[0] == '\0') {
         ESP_LOGI(TAG,
                  "LVGL display '%s' has no touch device",
@@ -295,10 +212,6 @@ static esp_err_t board_lvgl_register_touch(
         return ESP_ERR_INVALID_STATE;
     }
 
-    /*
-     * BMGR's lcd_touch device handle contains the actual
-     * esp_lcd_touch_handle_t.
-     */
     dev_lcd_touch_handles_t *touch =
         (dev_lcd_touch_handles_t *)touch_handle;
 
@@ -309,19 +222,12 @@ static esp_err_t board_lvgl_register_touch(
         return ESP_ERR_INVALID_STATE;
     }
 
-    esp_lv_adapter_touch_config_t touch_cfg =
-        ESP_LV_ADAPTER_TOUCH_DEFAULT_CONFIG(
-            display,
-            touch->touch_handle);
+    const lvgl_port_touch_cfg_t touch_cfg = {
+        .disp   = display,
+        .handle = touch->touch_handle,
+    };
 
-    /*
-     * Keep callbacks explicitly zeroed for adapter versions/configurations
-     * where this field exists.
-     */
-    touch_cfg.callbacks = (typeof(touch_cfg.callbacks)){0};
-
-    lv_indev_t *indev =
-        esp_lv_adapter_register_touch(&touch_cfg);
+    lv_indev_t *indev = lvgl_port_add_touch(&touch_cfg);
 
     if (indev == NULL) {
         ESP_LOGE(TAG,
@@ -343,8 +249,7 @@ static esp_err_t board_lvgl_register_touch(
 /*
  * Public entry point.
  *
- * BMGR must already have been initialized before this function is called,
- * because the LCD and touch handles are obtained from BMGR.
+ * BMGR must already have been initialized before this function is called.
  */
 esp_err_t board_lvgl_init(void)
 {
@@ -367,25 +272,35 @@ esp_err_t board_lvgl_init(void)
     }
 
     ESP_LOGI(TAG,
-             "Initializing LVGL adapter for %zu display(s)",
+             "Initializing LVGL port for %zu display(s)",
              BOARD_LVGL_ARRAY_SIZE(lvgl_cfg->displays));
 
-
     /*
-     * ---------------------------------------------------------------
-     * 1. Initialize the adapter exactly once.
-     * ---------------------------------------------------------------
+     * 1. Init the LVGL port task exactly once.
+     *
+     * Values below mirror lvgl_demo_v9/main/main.c bsp_display_cfg_t.lvgl_port_cfg
+     * from the Guition JC1060P470C_I_W_Y "New Panel" working demo. The stack
+     * lives in INTERNAL memory so the LVGL task keeps working even when PSRAM
+     * cache is being stalled by DPI refresh.
      */
-    esp_lv_adapter_config_t adapter_cfg =
-        ESP_LV_ADAPTER_DEFAULT_CONFIG();
-
-    ESP_ERROR_CHECK(esp_lv_adapter_init(&adapter_cfg));
-
+    const lvgl_port_cfg_t port_cfg = {
+        .task_priority     = 4,
+        .task_stack        = 16384,
+        .task_affinity     = -1,
+        .task_max_sleep_ms = 500,
+        .task_stack_caps   = MALLOC_CAP_INTERNAL | MALLOC_CAP_DEFAULT,
+        .timer_period_ms   = 5,
+    };
+    ret = lvgl_port_init(&port_cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG,
+                 "lvgl_port_init failed: %s",
+                 esp_err_to_name(ret));
+        return ret;
+    }
 
     /*
-     * ---------------------------------------------------------------
      * 2. Register every LVGL display mapping.
-     * ---------------------------------------------------------------
      */
     for (size_t i = 0;
          i < BOARD_LVGL_ARRAY_SIZE(lvgl_cfg->displays);
@@ -394,12 +309,6 @@ esp_err_t board_lvgl_init(void)
         const dev_custom_lvgl_displays_t *policy =
             &lvgl_cfg->displays[i];
 
-        /*
-         * A NULL LCD name is an unused generated entry.
-         *
-         * This makes the implementation safe if BMGR ever generates
-         * a fixed-capacity array rather than an exact-sized array.
-         */
         if (policy->lcd == NULL || policy->lcd[0] == '\0') {
             continue;
         }
@@ -416,10 +325,6 @@ esp_err_t board_lvgl_init(void)
                  policy->use_psram,
                  policy->buffer_height);
 
-
-        /*
-         * Get the BMGR LCD device.
-         */
         void *lcd_handle = NULL;
 
         ret = esp_board_manager_get_device_handle(
@@ -444,11 +349,6 @@ esp_err_t board_lvgl_init(void)
         dev_display_lcd_handles_t *lcd =
             (dev_display_lcd_handles_t *)lcd_handle;
 
-
-        /*
-         * Get the BMGR LCD configuration.  This tells us which
-         * esp_lcd/adapter path to select.
-         */
         dev_display_lcd_config_t *lcd_cfg = NULL;
 
         ret = esp_board_manager_get_device_config(
@@ -470,15 +370,8 @@ esp_err_t board_lvgl_init(void)
             return ESP_ERR_INVALID_STATE;
         }
 
-
-        /*
-         * Register the physical LCD as an LVGL display.
-         */
         lv_display_t *display =
-            board_lvgl_register_display(
-                lcd,
-                lcd_cfg,
-                policy);
+            board_lvgl_register_display(lcd, lcd_cfg, policy);
 
         if (display == NULL) {
             ESP_LOGE(TAG,
@@ -489,11 +382,6 @@ esp_err_t board_lvgl_init(void)
             return ESP_FAIL;
         }
 
-
-        /*
-         * Register the touch device associated with this display,
-         * if the mapping specifies one.
-         */
         ret = board_lvgl_register_touch(policy, display);
 
         if (ret != ESP_OK) {
@@ -508,23 +396,6 @@ esp_err_t board_lvgl_init(void)
                  i);
     }
 
-
-    /*
-     * ---------------------------------------------------------------
-     * 3. Start the adapter exactly once, after all displays and
-     *    input devices have been registered.
-     * ---------------------------------------------------------------
-     */
-    ret = esp_lv_adapter_start();
-
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG,
-                 "Failed to start LVGL adapter: %s",
-                 esp_err_to_name(ret));
-        return ret;
-    }
-
-    ESP_LOGI(TAG, "LVGL adapter started successfully");
-
+    ESP_LOGI(TAG, "LVGL port initialized successfully");
     return ESP_OK;
 }

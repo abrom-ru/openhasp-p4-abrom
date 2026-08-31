@@ -1,0 +1,46 @@
+peripherals:
+  # I2C bus shared by GT911 touch (0x5D) and RX8130 RTC (0x14).
+  - name: i2c_master
+    type: i2c
+    role: master
+    config:
+      port: 0
+      pins:
+        sda: 7
+        scl: 8
+      enable_internal_pullup: true
+
+  # LDO powering MIPI DSI PHY (must be initialized before DSI).
+  # ESP32-P4 uses internal LDO channel 3 (VO3_LDO) at 2.5 V for MIPI.
+  - name: ldo_mipi
+    type: ldo
+    config:
+      chan_id: 3
+      voltage_mv: 2500
+      adjustable: 1
+      owned_by_hw: 0
+
+  # MIPI DSI bus for the 1024x600 JD9165 panel (2 data lanes).
+  # Value taken from Guition working demo (JC1060P470C_I_W_Y New Panel,
+  # lvgl_demo_v9): esp32_p4_function_ev_board.c bus_config.lane_bit_rate_mbps=750.
+  - name: dsi_display
+    type: dsi
+    config:
+      bus_id: 0
+      data_lanes: 2
+      phy_clk_src: 0
+      lane_bit_rate_mbps: 750
+
+  # LCD backlight PWM (matches demo esp32_p4_function_ev_board.c
+  # bsp_display_brightness_init: timer 20 kHz, 10-bit, LOW_SPEED, GPIO23).
+  - name: ledc_backlight
+    type: ledc
+    config:
+      gpio_num: 23
+      channel: LEDC_CHANNEL_1
+      timer_sel: LEDC_TIMER_1
+      freq_hz: 20000
+      duty: 0
+      duty_resolution: LEDC_TIMER_10_BIT
+      speed_mode: LEDC_LOW_SPEED_MODE
+      output_invert: false

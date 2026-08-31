@@ -2,11 +2,84 @@
 # ESP32-P4
 # ============================================================
 
+# Chip revision: early engineering samples (v0.x / v1.x).
+# The board in hand is v1.3, incompatible with the default v3.1+ bootloader.
+# ESP32P4_SELECTS_REV_LESS_V3 switches IDF into pre-v3 mode (max supported v1.99).
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_100=y
+
+# On v1.x chips 400 MHz PLL config is not supported (esp_clk_init assert).
+# Force 360 MHz explicitly — choice default is not re-evaluated after
+# SELECTS_REV_LESS_V3 flips from this same defaults file.
+# CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_400 is not set
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_360=y
+
 # LVGL software rendering
 CONFIG_LV_DRAW_SW_DRAW_UNIT_CNT=2
 
-# PSRAM
+# Step 0 — LVGL widgets demo (baseline sanity check under real load).
+# Fonts 12/14/16/18/20/24 are picked at runtime based on display size.
+# Main task stack: factory lvgl_demo_v9 uses 10240 — widget tree construction
+# runs on app_main's stack and blows the default 3584.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
+CONFIG_LV_USE_DEMO_WIDGETS=y
+CONFIG_LV_FONT_MONTSERRAT_12=y
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_16=y
+CONFIG_LV_FONT_MONTSERRAT_18=y
+CONFIG_LV_FONT_MONTSERRAT_20=y
+CONFIG_LV_FONT_MONTSERRAT_24=y
+
+# ============================================================
+# MIPI-DSI reliability
+# ------------------------------------------------------------
+# Values below are copied verbatim from the Guition JC1060P470C_I_W_Y
+# "New Panel" working demo sdkconfig (lvgl_demo_v9). Without them the DPI
+# ISR can miss line/frame events while the cache is stalled by PSRAM
+# refresh, producing shear/tearing or a stuck frame.
+# ============================================================
+CONFIG_LCD_DSI_ISR_HANDLER_IN_IRAM=y
+CONFIG_LCD_DSI_OBJ_FORCE_INTERNAL=y
+
+# ============================================================
+# PSRAM (32MB HEX, 200 MHz — set in board defaults)
+# ------------------------------------------------------------
+# XIP from PSRAM requires FETCH_INSTRUCTIONS + RODATA + FLASH_LOAD_TO_PSRAM
+# to actually move code/rodata off flash. Without them XIP_FROM_PSRAM is a
+# noop and the CPU still stalls on flash while DPI fights for the bus.
+# ============================================================
 CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+CONFIG_SPIRAM_RODATA=y
+CONFIG_SPIRAM_FLASH_LOAD_TO_PSRAM=y
+CONFIG_SPIRAM_BOOT_HW_INIT=y
+
+# Reserve some internal SRAM for DMA-capable allocations (DPI, DSI, LEDC).
+# Values mirror the demo sdkconfig 1:1.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
+CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y
 
 CONFIG_CACHE_L2_CACHE_256KB=y
 CONFIG_CACHE_L2_CACHE_LINE_128B=y
+
+# ============================================================
+# Flash access (matches demo: QIO @ 80 MHz on 16 MB part)
+# ============================================================
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# ============================================================
+# Wi-Fi/BT via ESP-Hosted (co-processor = C6 inside JC-ESP32P4-M3)
+# ------------------------------------------------------------
+# Slave firmware on C6 is v2.3.2 (factory, do not reflash).
+# Values below mirror factory xiaozhi build config for JC1060P470C_I_W_Y
+# (main/boards/esp-p4-function-ev-board/config.json). Guition wired the
+# P4↔C6 SDIO/reset pins identical to ESP32-P4-Function-EV-Board, so the
+# _FUNC_BOARD preset gives correct pins without manual override.
+# ============================================================
+CONFIG_SLAVE_IDF_TARGET_ESP32C6=y
+CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD=y
+CONFIG_ESP_HOSTED_SDIO_HOST_INTERFACE=y
+CONFIG_ESP_HOSTED_SDIO_4_BIT_BUS=y
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y

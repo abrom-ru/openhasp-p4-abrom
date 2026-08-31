@@ -9,10 +9,18 @@
 #include "dev_display_lcd.h" // for dev_display_lcd_handles_t
 #include "dev_lcd_touch.h"   // for the touch handle type (if needed)
 
-#include "esp_lv_adapter.h"
+#include "esp_lvgl_port.h"
+#include "esp_lcd_mipi_dsi.h"
+#include "esp_cache.h"
+#include "esp_heap_caps.h"
 #include "board_lvgl.h"
 #include "lvgl.h"
+#include "lv_demos.h"
 
+#include "driver/ledc.h"
+#include "periph_ledc.h"
+
+#include "hasp.hpp"
 #include "hasp_fs.hpp"
 #include "hasp_ftp.hpp"
 #include "hasp_http.hpp"
@@ -22,9 +30,40 @@
 #include "hasp_wifi.hpp"
 
 #include "driver/gpio.h"
-#define LCD_BL_GPIO 45 // or whatever pin your board uses
+
+#if CONFIG_IDF_TARGET_ESP32P4
+// Backlight is driven by LEDC via the `lcd_brightness` BMGR device — this
+// GPIO number is only used by the S3 branch.
+#define LCD_BL_GPIO 23
+// board_devices.yaml: ledc_backlight uses LEDC_TIMER_10_BIT (max duty 1023).
+#define LCD_BL_MAX_DUTY 1023
+#else
+#define LCD_BL_GPIO 45  // WT32-SC01 Plus default
+#endif
 
 static const char *TAG = "main";
+
+#if CONFIG_IDF_TARGET_ESP32P4
+// Ramp the LEDC-driven backlight to `percent`. Matches factory
+// bsp_display_brightness_set() in esp32_p4_function_ev_board.c.
+static void board_backlight_set_percent(int percent)
+{
+    if (percent < 0)   percent = 0;
+    if (percent > 100) percent = 100;
+
+    void *handle = NULL;
+    esp_err_t err = esp_board_manager_get_device_handle("lcd_brightness", &handle);
+    if (err != ESP_OK || handle == NULL) {
+        ESP_LOGE(TAG, "backlight: no lcd_brightness handle (%s)", esp_err_to_name(err));
+        return;
+    }
+    periph_ledc_handle_t *ledc = (periph_ledc_handle_t *)handle;
+    uint32_t duty = ((uint32_t)LCD_BL_MAX_DUTY * (uint32_t)percent) / 100U;
+    ledc_set_duty(ledc->speed_mode, ledc->channel, duty);
+    ledc_update_duty(ledc->speed_mode, ledc->channel);
+    ESP_LOGI(TAG, "Backlight -> %d%% (duty=%lu)", percent, (unsigned long)duty);
+}
+#endif
 
 static ServiceManager mgr;
 static HaspWifi wifi;
@@ -70,25 +109,31 @@ static void lvgl_log_cb(lv_log_level_t level, const char *buf)
 
 static void app_ui_init()
 {
-    if (esp_lv_adapter_lock(-1) == ESP_OK)
+    ESP_LOGI(TAG, "app_ui_init: enter");
+
+    // Use a bounded timeout instead of 0/portMAX so we can diagnose deadlocks.
+    bool locked = lvgl_port_lock(2000);
+    ESP_LOGI(TAG, "app_ui_init: lock -> %s", locked ? "OK" : "TIMEOUT");
+
+    if (locked)
     {
         lv_obj_t *scr = lv_screen_active();
-        lv_obj_set_style_bg_color(scr, lv_color_hex(0x00FFFF), 0);
+        const int w = lv_obj_get_width(scr);
+        const int h = lv_obj_get_height(scr);
+        ESP_LOGI(TAG, "app_ui_init: scr=%p, size=%dx%d", scr, w, h);
 
-        lv_obj_t *label = lv_label_create(scr);
-        lv_label_set_text(label, "openHASP + LVGL9");
-        lv_obj_center(label);
+        hasp_init();
+        hasp_dispatch_jsonl(
+            "{\"page\":1,\"id\":1,\"obj\":\"btn\","
+            "\"x\":100,\"y\":100,\"w\":200,\"h\":80,\"text\":\"Hello\"}");
 
-        lv_obj_t *button = lv_button_create(scr);
+        lv_refr_now(NULL);
+        ESP_LOGI(TAG, "app_ui_init: HASP step-1 button dispatched, initial refr done");
 
-        lv_obj_set_pos(button, 50, 50);
-        lv_obj_set_size(button, 100, 50);
-
-        label = lv_label_create(button);
-        lv_label_set_text(label, "Button");
-        lv_obj_center(label);
-
-        esp_lv_adapter_unlock();
+        lvgl_port_unlock();
+    }
+    else {
+        ESP_LOGE(TAG, "app_ui_init: FAILED to acquire LVGL lock — task not running?");
     }
 }
 
@@ -132,12 +177,14 @@ extern "C" void app_main()
     ESP_ERROR_CHECK(nvs_flash_init());
 
     ESP_ERROR_CHECK(hasp_fs_init()); // before network services
-                        
+
+#if !CONFIG_IDF_TARGET_ESP32P4
     // Registration order = start order
     mgr.add(&wifi);
     mgr.add(&http);
     mgr.add(&mqtt);
     mgr.add(&ftp);
+#endif
 
     // First-time credentials (comment out after first run)
     {
@@ -163,14 +210,15 @@ extern "C" void app_main()
     ESP_ERROR_CHECK(esp_board_manager_init());
     esp_board_manager_print();
 
-    ESP_ERROR_CHECK(board_lvgl_init());
-    lv_log_register_print_cb(lvgl_log_cb);
-
-    app_ui_init();
-
-    // ---------- Backlight ----------
-    // WT32-SC01 Plus usually has backlight on GPIO 45 (check your board YAML / schematic)
-
+#if CONFIG_IDF_TARGET_ESP32P4
+    // Backlight is already OFF: the `lcd_brightness` BMGR device is configured
+    // with default_percent=0, which mirrors the factory demo's
+    // bsp_display_brightness_init() (LEDC channel installed at duty=0).
+    // We ramp it to 100 % via LEDC further below, only after LVGL has flushed
+    // its first frame — same ordering as bsp_display_start_with_config().
+#else
+    // S3 branch: no LEDC ctrl device — keep the original raw-GPIO backlight
+    // handling. Off during LVGL bring-up, on once we've drawn a frame.
     gpio_config_t bl_conf = {
         .pin_bit_mask = 1ULL << LCD_BL_GPIO,
         .mode = GPIO_MODE_OUTPUT,
@@ -179,7 +227,35 @@ extern "C" void app_main()
         .intr_type = GPIO_INTR_DISABLE,
     };
     gpio_config(&bl_conf);
+    gpio_set_level((gpio_num_t)LCD_BL_GPIO, 0);
+    ESP_LOGI(TAG, "Backlight configured OFF (GPIO%d)", LCD_BL_GPIO);
+#endif
+
+    ESP_ERROR_CHECK(board_lvgl_init());
+    ESP_LOGI(TAG, "board_lvgl_init returned OK");
+    lv_log_register_print_cb(lvgl_log_cb);
+
+    // Give the lvgl_port task a moment to actually start scheduling.
+    vTaskDelay(pdMS_TO_TICKS(200));
+
+    // Confirm LVGL sees a default display.
+    lv_display_t *def_disp = lv_display_get_default();
+    ESP_LOGI(TAG, "lv_display_get_default() = %p, hor=%d ver=%d",
+             def_disp,
+             def_disp ? lv_display_get_horizontal_resolution(def_disp) : -1,
+             def_disp ? lv_display_get_vertical_resolution(def_disp)   : -1);
+
+    app_ui_init();
+
+    // Backlight ON via LEDC after LVGL has drawn (matches factory
+    // bsp_display_backlight_on() -> bsp_display_brightness_set(100)).
+#if CONFIG_IDF_TARGET_ESP32P4
+    board_backlight_set_percent(100);
+#else
     gpio_set_level((gpio_num_t)LCD_BL_GPIO, 1);
+    ESP_LOGI(TAG, "Backlight ON (GPIO%d)", LCD_BL_GPIO);
+#endif
+    ESP_LOGI(TAG, "app_ui_init returned; LVGL task keeps rendering the demo");
 
     // // ---------- Fill screen CYAN ----------
     // const int width = 320; // or 480 depending on orientation
@@ -204,6 +280,7 @@ extern "C" void app_main()
     // ESP_LOGI("main", "Screen should now be CYAN with backlight on");
 
 
+#if !CONFIG_IDF_TARGET_ESP32P4
     mgr.startAll(); // wifi first, then http
 
     // From here the LVGL task runs; app_main can return or do other work
@@ -214,4 +291,9 @@ extern "C" void app_main()
         vTaskDelay(pdMS_TO_TICKS(500));
     }
     ESP_LOGI(TAG, "IP: %s", wifi.getIp().c_str());
+#else
+    // P4 bring-up: step 2 (Wi-Fi via esp-hosted + C6) verified separately.
+    // Step 3 = wire HASP services (mgr.startAll) same as S3 branch above.
+    ESP_LOGI(TAG, "P4 bring-up: HASP services wiring pending (step 3)");
+#endif
 }

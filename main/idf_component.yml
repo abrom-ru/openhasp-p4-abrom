@@ -17,7 +17,21 @@ dependencies:
   bblanchon/arduinojson: ^7.4.3
   espressif/esp_lcd_touch: '*'
   cezap/simple_ftp_server: ^1.0.0
-  espressif/esp_lvgl_adapter: '*'
+  espressif/esp_lvgl_port: '*'
   espressif/esp_board_manager:
     version: "*"
     require: public
+  # Wi-Fi/BT co-processor on Guition JC-ESP32P4-M3 module: ESP32-C6 slave
+  # (factory firmware v2.3.2). Host-side stack lives in `esp_hosted`,
+  # `esp_wifi_remote` shims the usual esp_wifi API onto the RPC transport.
+  # Pinout for the SDIO transport between P4 and C6 is taken from the
+  # ESP32-P4-Function-EV-Board preset — Guition wired the same pins inside
+  # the module. See sdkconfig.defaults.esp32p4 for the ESP_HOSTED_* flags.
+  espressif/esp_hosted:
+    version: "2.11.7"
+    rules:
+      - if: "target == esp32p4"
+  espressif/esp_wifi_remote:
+    version: "*"
+    rules:
+      - if: "target == esp32p4"

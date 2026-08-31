@@ -1,0 +1,16 @@
+# ============================================================
+# Guition JC1060P470C_I_W_Y board defaults
+# ============================================================
+
+# --------------
+# PSRAM (32MB HEX PSRAM on ESP32-P4)
+# --------------
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_HEX=y
+CONFIG_SPIRAM_TYPE_AUTO=y
+CONFIG_SPIRAM_SPEED_200M=y
+
+# --------------
+# Enable MIPI-DSI path in the LVGL adapter integration
+# --------------
+CONFIG_BOARD_LVGL_USE_DSI=y

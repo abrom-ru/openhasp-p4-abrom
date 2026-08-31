@@ -1,0 +1,116 @@
+devices:
+
+  # ---------------------------------------------------------------
+  # Guition JC1060P470C 1024x600 MIPI-DSI panel (JD9165 controller)
+  # ---------------------------------------------------------------
+  - name: display_lcd
+    chip: jd9165
+    type: display_lcd
+    sub_type: dsi
+    dependencies:
+      espressif/esp_lcd_jd9165: "*"
+    config:
+      # Values below are 1:1 with the Guition JC1060P470C_I_W_Y "New Panel"
+      # working demo (lvgl_demo_v9 in JC1060P470C_I_W_Y/1-Demo/Demo_IDF/
+      # ESP-IDF_5.5.4/JC1060P470C_I_W_Y_New_Panel/common_components/
+      # espressif__esp32_p4_function_ev_board/esp32_p4_function_ev_board.c
+      # + include/bsp/esp32_p4_function_ev_board.h).
+      reset_gpio_num: 0
+      rgb_ele_order: LCD_RGB_ELEMENT_ORDER_RGB
+      bits_per_pixel: 16
+      reset_active_high: 0
+      dbi_config:
+        virtual_channel: 0
+        lcd_cmd_bits: 8
+        lcd_param_bits: 8
+      dpi_config:
+        virtual_channel: 0
+        dpi_clk_src: MIPI_DSI_DPI_CLK_SRC_DEFAULT
+        dpi_clock_freq_mhz: 52
+        in_color_format: LCD_COLOR_FMT_RGB565
+        num_fbs: 1
+        flags:
+          use_dma2d: true
+          disable_lp: false
+        video_timing:
+          h_size: 1024
+          v_size: 600
+          hsync_pulse_width: 24
+          hsync_back_porch: 136
+          hsync_front_porch: 160
+          vsync_pulse_width: 2
+          vsync_back_porch: 21
+          vsync_front_porch: 12
+    peripherals:
+      - ldo_name: ldo_mipi
+      - dsi_name: dsi_display
+
+  # ----------------------------
+  # GT911 capacitive touch (I2C)
+  # ----------------------------
+  - name: lcd_touch
+    chip: gt911
+    type: lcd_touch
+    sub_type: i2c
+    version: default
+    dependencies:
+      espressif/esp_lcd_touch_gt911: "*"
+    config:
+      io_i2c_config:
+        lcd_cmd_bits: 16
+      touch_config:
+        x_max: 1024
+        y_max: 600
+        # Guition demo (esp32_p4_function_ev_board.h:92-93) leaves both
+        # BSP_LCD_TOUCH_RST and BSP_LCD_TOUCH_INT as GPIO_NUM_NC.
+        rst_gpio_num: -1
+        int_gpio_num: -1
+        levels:
+          reset: 0
+          interrupt: 0
+        flags:
+          swap_xy: false
+          mirror_x: false
+          mirror_y: false
+    peripherals:
+      - i2c_name: i2c_master
+        i2c_addr: [0xBA, 0x28]  # GT911 8-bit addresses (7-bit 0x5D/0x14)
+
+  # ------------------------------------------------------------
+  # LCD backlight PWM.
+  # Factory New Panel demo (esp32_p4_function_ev_board.c
+  # bsp_display_brightness_init) configures the LEDC channel with duty=0
+  # and only ramps to 100 % via bsp_display_backlight_on() *after*
+  # bsp_display_start_with_config() has finished LVGL init. We match that
+  # by starting the ledc_ctrl at 0 % and letting main.cpp bring it up to
+  # 100 % once LVGL has flushed the first frame. Prevents a bright empty
+  # panel showing uninitialized fb during boot.
+  # ------------------------------------------------------------
+  - name: lcd_brightness
+    type: ledc_ctrl
+    version: default
+    config:
+      default_percent: 0
+    peripherals:
+      - ledc_name: ledc_backlight
+
+  # -----------------------------------------------
+  # LVGL policy: display 0 = JD9165 + GT911, rot=0.
+  # -----------------------------------------------
+  - name: lvgl
+    type: custom
+    init_skip: true
+    config:
+      displays:
+        - lcd: display_lcd
+          touch: lcd_touch
+          rotation: 0
+          # Factory Guition BSP (esp32_p4_function_ev_board.h:265-266) for DSI:
+          # BSP_LCD_DRAW_BUFF_SIZE = H_RES * 50 lines, BSP_LCD_DRAW_BUFF_DOUBLE = 0.
+          double_buffer: false
+          # Factory lvgl_demo_v9 main.c: .buff_dma=true, .buff_spiram=false.
+          # 1024×50×2 = 100 KB — fits in internal DMA-capable SRAM easily.
+          use_psram: false
+          buffer_height: 50
+    depends_on:
+      - display_lcd
