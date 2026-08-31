@@ -123,16 +123,16 @@ static void app_ui_init()
         ESP_LOGI(TAG, "app_ui_init: scr=%p, size=%dx%d", scr, w, h);
 
         hasp_init();
-        // Step 3a demo: one of each supported obj type on a 1024x600 panel.
+        // Step 3a widgets on page 1 (all six supported obj types).
         hasp_dispatch_jsonl(
             "{\"page\":1,\"id\":1,\"obj\":\"label\","
-            "\"x\":40,\"y\":40,\"w\":220,\"h\":40,\"text\":\"HASP step 3a demo\"}");
+            "\"x\":40,\"y\":40,\"w\":260,\"h\":40,\"text\":\"HASP step 3b - page 1\"}");
         hasp_dispatch_jsonl(
             "{\"page\":1,\"id\":2,\"obj\":\"btn\","
-            "\"x\":280,\"y\":30,\"w\":180,\"h\":60,\"text\":\"Button\"}");
+            "\"x\":320,\"y\":30,\"w\":180,\"h\":60,\"text\":\"Button\"}");
         hasp_dispatch_jsonl(
             "{\"page\":1,\"id\":3,\"obj\":\"switch\","
-            "\"x\":500,\"y\":40,\"w\":80,\"h\":40,\"val\":1}");
+            "\"x\":540,\"y\":40,\"w\":80,\"h\":40,\"val\":1}");
         hasp_dispatch_jsonl(
             "{\"page\":1,\"id\":4,\"obj\":\"checkbox\","
             "\"x\":40,\"y\":160,\"w\":220,\"h\":40,\"text\":\"Check me\",\"val\":1}");
@@ -143,8 +143,24 @@ static void app_ui_init()
             "{\"page\":1,\"id\":6,\"obj\":\"bar\","
             "\"x\":580,\"y\":170,\"w\":260,\"h\":20,\"val\":75}");
 
+        // Step 3b: extra widgets on page 2 to prove the page parent switch works.
+        hasp_dispatch_jsonl(
+            "{\"page\":2,\"id\":1,\"obj\":\"label\","
+            "\"x\":40,\"y\":40,\"w\":260,\"h\":40,\"text\":\"HASP step 3b - page 2\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":2,\"id\":2,\"obj\":\"slider\","
+            "\"x\":40,\"y\":100,\"w\":400,\"h\":20,\"val\":80}");
+
+        // 3b demo: auto-toggle pages 1<->2 every 4s (proves haspPages.set works).
+        // Real dispatch of the `page N` command lives in 3d; this is a temporary probe.
+        lv_timer_t* t = lv_timer_create([](lv_timer_t* /*t*/) {
+            uint8_t cur = hasp_get_page();
+            hasp_set_page(cur == 1 ? 2 : 1);
+        }, 4000, nullptr);
+        (void)t;
+
         lv_refr_now(NULL);
-        ESP_LOGI(TAG, "app_ui_init: HASP step-3a widgets dispatched, initial refr done");
+        ESP_LOGI(TAG, "app_ui_init: HASP step-3b widgets on pages 1+2, current=%u", hasp_get_page());
 
         lvgl_port_unlock();
     }

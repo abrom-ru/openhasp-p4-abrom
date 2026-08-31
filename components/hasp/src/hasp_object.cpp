@@ -12,6 +12,7 @@
 #include "hasp_object.h"
 #include "hasp_event.h"
 #include "hasp_parser.h"
+#include "hasp_page.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -104,18 +105,21 @@ void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id)
     /* Skip line detection */
     if (!config[FP_SKIP].isNull() && config[FP_SKIP].as<bool>()) return;
 
-    /* Page selection — 3a: single active screen; pageid saved but not used yet. */
+    /* Page selection — mirrors src/hasp/hasp_object.cpp:233-247 exactly:
+     * consume+remove FP_PAGE up front, only update saved_page_id after we've
+     * confirmed the pageid resolves to a valid screen. */
     uint8_t pageid = saved_page_id;
     if (!config[FP_PAGE].isNull()) {
         pageid = config[FP_PAGE].as<uint8_t>();
+        config.remove(FP_PAGE);
     }
-    saved_page_id = pageid;
 
-    lv_obj_t* parent_obj = lv_screen_active();
+    lv_obj_t* parent_obj = haspPages.get_obj(pageid);
     if (!parent_obj) {
-        ESP_LOGW(TAG, "no active screen");
+        ESP_LOGW(TAG, "no page obj for pageid=%u", pageid);
         return;
     }
+    saved_page_id = pageid;
 
     uint8_t id  = config[FP_ID].as<uint8_t>();
     uint16_t sdbm = 0;
@@ -239,8 +243,9 @@ void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id)
     /* Apply remaining attributes (x/y/w/h/text/val in 3a scope).
      * Same pattern as S3: remove framework keys, then iterate the rest.
      * JsonObject::remove is const-qualified in ArduinoJson (mutates doc, not handle). */
+    /* FP_PAGE already removed above (S3 pattern). Strip the rest of the framework
+     * keys before iterating attributes. */
     config.remove(FP_SKIP);
-    config.remove(FP_PAGE);
     config.remove(FP_ID);
     config.remove(FP_OBJ);
     config.remove(FP_PARENTID);

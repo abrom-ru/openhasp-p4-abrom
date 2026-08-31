@@ -24,6 +24,10 @@ esp_err_t hasp_init(void);
  */
 esp_err_t hasp_dispatch_jsonl(const char* line);
 
+/* Page switching (step 3b). Caller must hold the LVGL lock. */
+void    hasp_set_page(uint8_t pageid);
+uint8_t hasp_get_page(void);
+
 #ifdef __cplusplus
 }
 #endif

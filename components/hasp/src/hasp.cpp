@@ -9,6 +9,7 @@
 
 #include "hasp.hpp"
 #include "hasp_object.h"
+#include "hasp_page.h"
 
 #include <ArduinoJson.h>
 #include "esp_log.h"
@@ -17,7 +18,9 @@ static const char* TAG = "hasp";
 
 extern "C" esp_err_t hasp_init(void)
 {
-    ESP_LOGI(TAG, "hasp_init (step 3a-refactor: S3-style switch(sdbm))");
+    ESP_LOGI(TAG, "hasp_init (step 3b: haspPages + %d screens)", HASP_NUM_PAGES);
+    /* 3b: allocate the N page screens and load page 1. Caller holds LVGL lock. */
+    haspPages.init(PAGE_START_INDEX);
     return ESP_OK;
 }
 
@@ -35,9 +38,9 @@ extern "C" esp_err_t hasp_dispatch_jsonl(const char* line)
         return ESP_ERR_INVALID_ARG;
     }
 
-    /* saved_page_id: 3a keeps a single conversation-local counter — page system
-     * lands in 3b. Static so successive jsonl lines share the last-seen page. */
-    static uint8_t saved_page_id = 1;
+    /* saved_page_id: sticky across jsonl lines so a `{"page":2}` line applies to
+     * all following lines without a page field — matches S3 dispatch_parse_jsonl. */
+    static uint8_t saved_page_id = PAGE_START_INDEX;
     hasp_new_object(doc.as<JsonObject>(), saved_page_id);
     return ESP_OK;
 }
