@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 /**
- * Initialize HASP core minimum (step 1 scope).
+ * Initialize HASP core.
  * Must be called under LVGL lock or before LVGL task starts.
  * Currently a no-op — placeholder for future object registry / page system.
  */
@@ -15,8 +15,8 @@ esp_err_t hasp_init(void);
 
 /**
  * Parse one JSONL line and materialize a single LVGL object on the active screen.
- * Supported fields (step 1 minimum): page, id, obj, x, y, w, h, text.
- * Supported obj types: "btn".
+ * Supported fields (step 3a): page, id, obj, x, y, w, h, text, val.
+ * Supported obj types: "btn", "label", "switch", "slider", "checkbox", "bar".
  * Caller must hold the LVGL lock.
  *
  * @param line NUL-terminated JSON object (single line, no trailing newline required).

@@ -123,12 +123,28 @@ static void app_ui_init()
         ESP_LOGI(TAG, "app_ui_init: scr=%p, size=%dx%d", scr, w, h);
 
         hasp_init();
+        // Step 3a demo: one of each supported obj type on a 1024x600 panel.
         hasp_dispatch_jsonl(
-            "{\"page\":1,\"id\":1,\"obj\":\"btn\","
-            "\"x\":100,\"y\":100,\"w\":200,\"h\":80,\"text\":\"Hello\"}");
+            "{\"page\":1,\"id\":1,\"obj\":\"label\","
+            "\"x\":40,\"y\":40,\"w\":220,\"h\":40,\"text\":\"HASP step 3a demo\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":1,\"id\":2,\"obj\":\"btn\","
+            "\"x\":280,\"y\":30,\"w\":180,\"h\":60,\"text\":\"Button\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":1,\"id\":3,\"obj\":\"switch\","
+            "\"x\":500,\"y\":40,\"w\":80,\"h\":40,\"val\":1}");
+        hasp_dispatch_jsonl(
+            "{\"page\":1,\"id\":4,\"obj\":\"checkbox\","
+            "\"x\":40,\"y\":160,\"w\":220,\"h\":40,\"text\":\"Check me\",\"val\":1}");
+        hasp_dispatch_jsonl(
+            "{\"page\":1,\"id\":5,\"obj\":\"slider\","
+            "\"x\":280,\"y\":170,\"w\":260,\"h\":20,\"val\":42}");
+        hasp_dispatch_jsonl(
+            "{\"page\":1,\"id\":6,\"obj\":\"bar\","
+            "\"x\":580,\"y\":170,\"w\":260,\"h\":20,\"val\":75}");
 
         lv_refr_now(NULL);
-        ESP_LOGI(TAG, "app_ui_init: HASP step-1 button dispatched, initial refr done");
+        ESP_LOGI(TAG, "app_ui_init: HASP step-3a widgets dispatched, initial refr done");
 
         lvgl_port_unlock();
     }
