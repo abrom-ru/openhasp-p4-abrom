@@ -149,4 +149,11 @@ static inline bool obj_check_type(const lv_obj_t* obj, lv_hasp_obj_type_t haspob
 /* Create a new object described by `config` on the given saved_page_id. */
 void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id);
 
+/* Object registry (step 3c) — mirrors src/hasp/hasp_object.cpp:22..69.
+ * Recursive child walk over the LVGL tree, matching on hasp_obj_user_data_t.id.
+ * Returns nullptr if not found (or `parent` when objid == 0, matching S3). */
+lv_obj_t* hasp_find_obj_from_parent_id(lv_obj_t* parent, uint8_t objid);
+lv_obj_t* hasp_find_obj_from_page_id(uint8_t pageid, uint8_t objid);
+bool      hasp_find_id_from_obj(const lv_obj_t* obj, uint8_t* pageid, uint8_t* objid);
+
 #endif
