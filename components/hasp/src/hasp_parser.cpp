@@ -1,11 +1,13 @@
 /* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
-/* Ported to p4-abrom (3a→3e): mirrors src/hasp/hasp_parser.cpp
+/* Ported to p4-abrom (3a→3f): mirrors src/hasp/hasp_parser.cpp
  *  - get_sdbm           (S3 line 172) — verbatim.
  *  - is_true            (S3 line 180) — verbatim minus PSTR wrappers.
  *  - haspPayloadToColor (S3 line 18)  — hex + RGB565 only, named colors dropped
  *    (haspNamedColors[] table not yet ported — comes with theme/color widgets).
  *    LVGL 9 lv_color32_t field access is `.red/.green/.blue` (not `.ch.red`).
+ *  - get_event_name     (S3 line 135) — verbatim, PSTR/memcpy_P → plain strcpy.
+ *  - get_event_state    (S3 line 116) — verbatim.
  */
 
 #include <ctype.h>
@@ -14,6 +16,7 @@
 #include <strings.h>
 
 #include "hasp_parser.h"
+#include "hasp_event.h" /* HASP_EVENT_* enum values */
 
 /* 16-bit hashing function http://www.cse.yorku.ca/~oz/hash.html */
 uint16_t Parser::get_sdbm(const char* str)
@@ -83,4 +86,41 @@ bool Parser::haspPayloadToColor(const char* payload, lv_color32_t& color)
 
     /* Named colors — deferred (haspNamedColors[] not ported yet). */
     return false;
+}
+
+/* Map an eventid to its ON/OFF state — mirrors S3 hasp_parser.cpp:116.
+ * Used by 3f event handlers before publishing group updates. */
+bool Parser::get_event_state(uint8_t eventid)
+{
+    switch (eventid) {
+        case HASP_EVENT_ON:
+        case HASP_EVENT_DOWN:
+        case HASP_EVENT_LONG:
+        case HASP_EVENT_HOLD:
+            return true;
+        default:
+            return false;
+    }
+}
+
+/* Map an eventid to its description string — mirrors S3 hasp_parser.cpp:135.
+ * `buffer` must be ≥8 chars ("release"/"changed" + \0). */
+void Parser::get_event_name(uint8_t eventid, char* buffer, size_t size)
+{
+    if (!buffer || size == 0) return;
+    const char* name;
+    switch (eventid) {
+        case HASP_EVENT_ON:      name = "on";      break;
+        case HASP_EVENT_OFF:     name = "off";     break;
+        case HASP_EVENT_UP:      name = "up";      break;
+        case HASP_EVENT_DOWN:    name = "down";    break;
+        case HASP_EVENT_RELEASE: name = "release"; break;
+        case HASP_EVENT_LONG:    name = "long";    break;
+        case HASP_EVENT_HOLD:    name = "hold";    break;
+        case HASP_EVENT_LOST:    name = "lost";    break;
+        case HASP_EVENT_CHANGED: name = "changed"; break;
+        default:                 name = "unknown"; break;
+    }
+    strncpy(buffer, name, size - 1);
+    buffer[size - 1] = '\0';
 }

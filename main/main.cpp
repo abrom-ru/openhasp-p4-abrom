@@ -22,6 +22,7 @@
 
 #include "hasp.hpp"
 #include "hasp_dispatch.h"
+#include "hasp_object.h" // 3f smoke: hasp_find_obj_from_page_id
 #include "hasp_fs.hpp"
 #include "hasp_ftp.hpp"
 #include "hasp_http.hpp"
@@ -176,6 +177,29 @@ static void app_ui_init()
         hasp_dispatch_command("p1b5.max=200");
         hasp_dispatch_command("p2b1.hidden=1");           // page-2 label hidden on entry
         hasp_dispatch_command("p2b1.hidden=0");           // ... then shown again
+
+        // 3f smoke tests — synthesize LVGL events on registered objects so we
+        // can prove the event handlers now emit real JSON via object_dispatch_state
+        // (log line: "state pXbY => {...}"). Real touch on the panel triggers
+        // the same path; this exercises it without hardware.
+        {
+            lv_obj_t* btn = hasp_find_obj_from_page_id(1, 2);   // p1b2 (button)
+            lv_obj_t* sw  = hasp_find_obj_from_page_id(1, 3);   // p1b3 (switch)
+            lv_obj_t* sld = hasp_find_obj_from_page_id(1, 5);   // p1b5 (slider)
+            if (btn) {
+                lv_obj_send_event(btn, LV_EVENT_PRESSED,       nullptr); // → "down"
+                lv_obj_send_event(btn, LV_EVENT_SHORT_CLICKED, nullptr); // → "up"
+                lv_obj_send_event(btn, LV_EVENT_RELEASED,      nullptr); // → "release"
+            }
+            if (sw) {
+                lv_obj_add_state(sw, LV_STATE_CHECKED);
+                lv_obj_send_event(sw, LV_EVENT_PRESSED, nullptr);        // → {"event":"down","val":1}
+            }
+            if (sld) {
+                lv_slider_set_value(sld, 77, LV_ANIM_OFF);
+                lv_obj_send_event(sld, LV_EVENT_VALUE_CHANGED, nullptr); // → {"event":"changed","val":77}
+            }
+        }
 
         // 3d demo: auto-toggle pages 1<->2 via dispatch every 4s (proves the
         // "page N" text command reaches haspPages.set()). Real invocation

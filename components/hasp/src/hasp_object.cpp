@@ -114,6 +114,29 @@ bool hasp_find_id_from_obj(const lv_obj_t* obj, uint8_t* pageid, uint8_t* objid)
     return true;
 }
 
+/* ==================== State dispatch (step 3f) ==============================
+ * Mirrors src/hasp/hasp_object.cpp:110 object_dispatch_state().
+ * S3 builds the state subtopic (pageid.name or "pXbY") then hands the payload
+ * to dispatch_state_subtopic → mqtt_send_state. We keep the same topic-shape
+ * contract (so 3f handlers already produce MQTT-ready payloads) but log-only
+ * for now — the MQTT wiring lands in step 4 where the sink swaps from ESP_LOGI
+ * to mqtt_send_state without touching event handlers or attribute getters.
+ */
+void object_dispatch_state(uint8_t pageid, uint8_t btnid, const char* payload)
+{
+    if (!payload) return;
+
+    char topic[64];
+    char* pagename = haspPages.get_name(pageid);
+    if (pagename)
+        snprintf(topic, sizeof(topic), "%s.b%u", pagename, btnid);
+    else
+        snprintf(topic, sizeof(topic), "p%ub%u", pageid, btnid); /* HASP_OBJECT_NOTATION */
+
+    /* Step 4 will replace this ESP_LOGI with dispatch_state_subtopic(topic, payload). */
+    ESP_LOGI(TAG, "state %s => %s", topic, payload);
+}
+
 /* Mirrors src/hasp/hasp_object.cpp:228 hasp_new_object().
  *
  * Flow (S3 line 262-745, preserved in 3c):

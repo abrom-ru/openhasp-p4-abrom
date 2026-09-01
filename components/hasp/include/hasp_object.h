@@ -163,4 +163,10 @@ lv_obj_t* hasp_find_obj_from_parent_id(lv_obj_t* parent, uint8_t objid);
 lv_obj_t* hasp_find_obj_from_page_id(uint8_t pageid, uint8_t objid);
 bool      hasp_find_id_from_obj(const lv_obj_t* obj, uint8_t* pageid, uint8_t* objid);
 
+/* State topic dispatcher (step 3f) — mirrors src/hasp/hasp_object.cpp:110.
+ * Formats `pXbY` (or the named page) and forwards to the state-topic sink.
+ * MVP: sink is ESP_LOGI only ("state pXbY => <payload>"); real MQTT publish
+ * lands in step 4 alongside dispatch_state_subtopic + hasp_mqtt. */
+void object_dispatch_state(uint8_t pageid, uint8_t btnid, const char* payload);
+
 #endif
