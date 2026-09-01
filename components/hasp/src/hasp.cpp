@@ -10,6 +10,7 @@
 #include "hasp.hpp"
 #include "hasp_object.h"
 #include "hasp_page.h"
+#include "hasp_font.h"
 
 #include <ArduinoJson.h>
 #include "esp_log.h"
@@ -19,6 +20,9 @@ static const char* TAG = "hasp";
 extern "C" esp_err_t hasp_init(void)
 {
     ESP_LOGI(TAG, "hasp_init (step 3b: haspPages + %d screens)", HASP_NUM_PAGES);
+    /* 3h-2 stage 3: init FreeType before pages so labels created with a
+     * text_font attribute in early jsonl can resolve the font. */
+    font_setup();
     /* 3b: allocate the N page screens and load page 1. Caller holds LVGL lock. */
     haspPages.init(PAGE_START_INDEX);
     return ESP_OK;

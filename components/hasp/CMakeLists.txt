@@ -7,6 +7,7 @@ idf_component_register(
         "src/hasp_page.cpp"
         "src/hasp_dispatch.cpp"
         "src/hasp_attribute.cpp"
+        "src/hasp_font.cpp"
     INCLUDE_DIRS "include"
     REQUIRES
         bblanchon__arduinojson

@@ -23,6 +23,7 @@
 #include "hasp.hpp"
 #include "hasp_dispatch.h"
 #include "hasp_object.h" // 3f smoke: hasp_find_obj_from_page_id
+#include "hasp_font.h"   // 3h-2 stage 3 smoke: get_font() FreeType path
 #include "hasp_fs.hpp"
 #include "hasp_ftp.hpp"
 #include "hasp_http.hpp"
@@ -126,6 +127,20 @@ static void app_ui_init()
         ESP_LOGI(TAG, "app_ui_init: scr=%p, size=%dx%d", scr, w, h);
 
         hasp_init();
+
+        // 3h-2 stage 3 smoke — force a FreeType load through the same code
+        // path that stage 4 will use from text_font=. Expected logs:
+        //   "hasp_font: FreeType init OK (glyph cache=256)"  (from font_setup)
+        //   "hasp_font: loaded L:openhasp.ttf size=24 line_h=<n>"
+        // A NULL return here means FreeType couldn't open /littlefs/openhasp.ttf
+        // via the LVGL FS 'L:' drive — the whole 3h-2 chain is broken.
+        {
+            lv_font_t* f24 = get_font("openhasp24");
+            ESP_LOGI(TAG, "font smoke: get_font(\"openhasp24\") -> %p", f24);
+            lv_font_t* f24b = get_font("openhasp24"); // cache hit — no second "loaded" log
+            ESP_LOGI(TAG, "font smoke: cache hit same ptr? %s", (f24 == f24b) ? "yes" : "NO");
+        }
+
         // Step 3a widgets on page 1 (all six supported obj types).
         hasp_dispatch_jsonl(
             "{\"page\":1,\"id\":1,\"obj\":\"label\","
