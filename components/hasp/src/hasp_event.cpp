@@ -103,11 +103,26 @@ void delete_event_handler(lv_event_t* e)
     }
 }
 
-/* Mirrors src/hasp/hasp_event.cpp:475 generic_event_handler — button/label/bar/etc. */
+/* Mirrors src/hasp/hasp_event.cpp:475 generic_event_handler — button/label/bar/etc.
+ *
+ * LVGL 9 vs S3 event stream note:
+ *   S3 patched LVGL 7 to emit RELEASED before SHORT_CLICKED, and used the
+ *   file-static `last_value_sent` to dedup (RELEASED after SHORT_CLICKED → drop).
+ *   LVGL 9 default order is PRESSED → RELEASED → SHORT_CLICKED, so the S3 dedup
+ *   would fire in the wrong direction. Additionally, LVGL 9 sends VALUE_CHANGED
+ *   for clickable btn on state toggle (PRESSED bit) which S3/LVGL 7 didn't.
+ *
+ *   Per HASP MQTT contract a button tap is exactly {down, up}. RELEASE and
+ *   CHANGED are not part of the button contract, so we drop them here.
+ *   (RELEASE is still emitted by slider/toggle handlers where it's meaningful.)
+ */
 void generic_event_handler(lv_event_t* e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_DELETE) { delete_event_handler(e); return; }
+
+    /* Drop LVGL 9 button-only spam that has no HASP counterpart. */
+    if (code == LV_EVENT_VALUE_CHANGED || code == LV_EVENT_RELEASED) return;
 
     uint8_t hasp_event_id;
     if (!translate_event(code, hasp_event_id)) return;
