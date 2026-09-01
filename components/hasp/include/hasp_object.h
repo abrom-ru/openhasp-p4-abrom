@@ -149,12 +149,11 @@ static inline bool obj_check_type(const lv_obj_t* obj, lv_hasp_obj_type_t haspob
 /* Create a new object described by `config` on the given saved_page_id. */
 void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id);
 
-/* Attribute processors (step 3d — dispatch entry points).
- * Signatures mirror S3 hasp_object.cpp:166 / hasp_attribute.cpp:2657 —
- * payload as raw string (dispatch works with text, not JsonVariant).
- * Implementation is a stub covering only x/y/w/h/text/val until 3e ports
- * the full SDBM-hashed hasp_attribute switch. */
-void hasp_process_obj_attribute(lv_obj_t* obj, const char* attribute, const char* payload, bool update);
+/* hasp_process_attribute — thin wrapper: resolve (pageid, objid) via
+ * hasp_find_obj_from_page_id, then call hasp_process_obj_attribute (declared
+ * in hasp_attribute.h with C linkage). Mirrors S3 hasp_object.cpp:166.
+ * The obj-taking variant lives in hasp_attribute.h — don't re-declare here
+ * (a second decl at C++ linkage collides with that extern "C" one). */
 void hasp_process_attribute(uint8_t pageid, uint8_t objid, const char* attr, const char* payload, bool update);
 
 /* Object registry (step 3c) — mirrors src/hasp/hasp_object.cpp:22..69.

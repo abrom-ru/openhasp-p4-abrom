@@ -156,11 +156,26 @@ static void app_ui_init()
         //  - pXbY.attr=value  -> parsed, routed to hasp_process_attribute
         //  - "page N"         -> haspPages.set(N)
         // Expected log: "reuse p1b1" (label text update via dispatch), no warnings.
-        hasp_dispatch_command("p1b1.text=HASP 3d: dispatch OK");
+        hasp_dispatch_command("p1b1.text=HASP 3e: attributes OK");
         hasp_dispatch_command("p2b2.val=25");
         // Also exercise jsonl and json array paths through the same entry point.
         hasp_dispatch_command("{\"page\":1,\"id\":6,\"val\":50}"); // update bar via jsonl
         hasp_dispatch_command("[\"p1b5.val=90\", \"p1b3.val=0\"]"); // json array of cmds
+
+        // 3e smoke tests — exercise the SDBM attribute switch introduced in
+        // components/hasp/src/hasp_attribute.cpp. Each command should mutate
+        // the corresponding widget with no "unknown attribute" warning.
+        hasp_dispatch_command("p1b2.bg_color=#4040ff");   // button: blue background
+        hasp_dispatch_command("p1b1.text_color=#00ff88"); // label: greenish text
+        hasp_dispatch_command("p1b6.opacity=128");        // bar at 50% transparency
+        hasp_dispatch_command("p1b2.toggle=1");           // button becomes checkable
+        hasp_dispatch_command("p1b2.val=1");              // ... and now shows checked state
+        hasp_dispatch_command("p1b1.align=center");       // label text centered
+        hasp_dispatch_command("p1b1.mode=scroll");        // label scrolls if too long
+        hasp_dispatch_command("p1b5.min=0");              // slider range verify (already 0..100)
+        hasp_dispatch_command("p1b5.max=200");
+        hasp_dispatch_command("p2b1.hidden=1");           // page-2 label hidden on entry
+        hasp_dispatch_command("p2b1.hidden=0");           // ... then shown again
 
         // 3d demo: auto-toggle pages 1<->2 via dispatch every 4s (proves the
         // "page N" text command reaches haspPages.set()). Real invocation

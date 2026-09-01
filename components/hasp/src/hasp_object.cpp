@@ -1,6 +1,6 @@
 /* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
-/* Ported to p4-abrom (step 3c): hasp_new_object() mirrors
+/* Ported to p4-abrom (step 3c/3e): hasp_new_object() mirrors
  * src/hasp/hasp_object.cpp:228 — page selection (via haspPages, step 3b),
  * id lookup via hasp_find_obj_from_parent_id (step 3c), sdbm-based type
  * switch, post-create ops, then hasp_parse_json_attributes().
@@ -9,11 +9,14 @@
  * ported below — mirrors src/hasp/hasp_object.cpp:22..69.
  *
  * LVGL 7/8 API calls swapped for LVGL 9 equivalents (documented per-line).
- * Attribute processor is still a stub covering only x/y/w/h/text/val — real
- * hasp_attribute (SDBM switch) lands in 3e.
+ *
+ * 3e: attribute processor moved to hasp_attribute.cpp — this file now only
+ * holds the thin pageid+objid wrapper (hasp_process_attribute, S3 line 166)
+ * and hasp_parse_json_attributes which drives it for each JSON key.
  */
 
 #include "hasp_object.h"
+#include "hasp_attribute.h"
 #include "hasp_event.h"
 #include "hasp_parser.h"
 #include "hasp_page.h"
@@ -24,61 +27,6 @@
 #include "esp_log.h"
 
 static const char* TAG = "hasp_obj";
-
-/* Stub attribute processor — 3d scope: x, y, w, h, text, val.
- * Signature mirrors S3 hasp_attribute.cpp:2657 (obj, attr, const char* payload, bool update).
- * Payload is a raw string — atoi/atof parse for numeric attrs. Real per-attribute
- * switch by SDBM (~2000 lines in S3) comes in 3e; for now just the six MVP attrs.
- * `update` flag (S3 semantics: true = write, false = query) — 3d honours it only as
- * "skip on false" since read-back / MQTT publish lives in 3f.
- */
-void hasp_process_obj_attribute(lv_obj_t* obj, const char* attr, const char* payload, bool update)
-{
-    if (!attr || !obj || !payload) return;
-    if (!update) return; /* query semantics — 3f will publish current value */
-
-    if      (!strcasecmp(attr, "x"))    lv_obj_set_x(obj, (int32_t)atoi(payload));
-    else if (!strcasecmp(attr, "y"))    lv_obj_set_y(obj, (int32_t)atoi(payload));
-    else if (!strcasecmp(attr, "w"))    lv_obj_set_width(obj, (int32_t)atoi(payload));
-    else if (!strcasecmp(attr, "h"))    lv_obj_set_height(obj, (int32_t)atoi(payload));
-    else if (!strcasecmp(attr, "text")) {
-        switch (obj_get_type(obj)) {
-            case LV_HASP_LABEL:
-                lv_label_set_text(obj, payload);
-                break;
-            case LV_HASP_CHECKBOX:
-                lv_checkbox_set_text(obj, payload);
-                break;
-            case LV_HASP_BUTTON: {
-                /* First (or only) child of a HASP button is its label — see
-                 * button creation branch below where lv_label_create(obj) is called. */
-                lv_obj_t* lbl = lv_obj_get_child(obj, 0);
-                if (lbl) lv_label_set_text(lbl, payload);
-                break;
-            }
-            default: break;
-        }
-    }
-    else if (!strcasecmp(attr, "val")) {
-        int32_t v = (int32_t)atoi(payload);
-        switch (obj_get_type(obj)) {
-            case LV_HASP_SLIDER:
-                lv_slider_set_value(obj, v, LV_ANIM_OFF);
-                break;
-            case LV_HASP_BAR:
-                lv_bar_set_value(obj, v, LV_ANIM_OFF);
-                break;
-            case LV_HASP_SWITCH:
-            case LV_HASP_CHECKBOX:
-                if (v) lv_obj_add_state(obj, LV_STATE_CHECKED);
-                else   lv_obj_remove_state(obj, LV_STATE_CHECKED);
-                break;
-            default: break;
-        }
-    }
-    /* Unknown attributes silently ignored in 3d stub (S3 logs a warning via
-     * hasp_attribute — added in 3e). */
-}
 
 /* Mirrors S3 hasp_object.cpp:166 — used by dispatch (`p1b2.text=...`). */
 void hasp_process_attribute(uint8_t pageid, uint8_t objid, const char* attr, const char* payload, bool update)
