@@ -32,6 +32,7 @@
 #include "hasp_wifi.hpp"
 
 #include "driver/gpio.h"
+#include <sys/stat.h>
 
 #if CONFIG_IDF_TARGET_ESP32P4
 // Backlight is driven by LEDC via the `lcd_brightness` BMGR device — this
@@ -337,6 +338,18 @@ extern "C" void app_main()
     ESP_ERROR_CHECK(nvs_flash_init());
 
     ESP_ERROR_CHECK(hasp_fs_init()); // before network services
+
+    // 3h-2 stage 2 smoke — confirm the baked LittleFS image reached the panel.
+    // Expected: "openhasp.ttf size=91960" (matches host-side file).
+    {
+        struct stat st;
+        const char* p = "/littlefs/openhasp.ttf";
+        if (stat(p, &st) == 0) {
+            ESP_LOGI(TAG, "littlefs check: %s size=%ld", p, (long)st.st_size);
+        } else {
+            ESP_LOGW(TAG, "littlefs check: %s NOT FOUND", p);
+        }
+    }
 
 #if !CONFIG_IDF_TARGET_ESP32P4
     // Registration order = start order

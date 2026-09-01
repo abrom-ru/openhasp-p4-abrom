@@ -21,7 +21,7 @@ idf_component_register(
         lvgl__lvgl
 )
 
-# littlefs_create_partition_image(storage ${CMAKE_CURRENT_LIST_DIR}/../data/storage FLASH_IN_PROJECT)
+littlefs_create_partition_image(storage ${CMAKE_CURRENT_LIST_DIR}/../data/storage FLASH_IN_PROJECT)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE
     -Wall
