@@ -373,12 +373,21 @@ static hasp_attribute_type_t attribute_common_method(lv_obj_t* obj, uint16_t att
  * 3g scope: expand attribute_local_style from 2-color stub → LVGL 9 port of
  * `hasp_local_style_attr()` (S3 hasp_attribute.cpp:721..1200-ish, ~60 style
  * props). We keep S3 semantics (parse payload → lv_obj_set_style_*, return
- * HASP_ATTR_TYPE_*) but MVP restricts the LVGL 9 selector to `LV_PART_MAIN`.
+ * HASP_ATTR_TYPE_*).
+ *
+ * 3h-1 scope: replace hard-coded LV_PART_MAIN selector with a proper part/
+ * state parser. Ports S3 `hasp_attribute_get_part_state{_new,_old}` (S3:347/
+ * 531/702) to LVGL 9. Attributes like "bg_color1" (indicator on slider/switch/
+ * bar/checkbox), "bg_color20" (knob on slider/switch/arc — new 2-digit format:
+ * PS with P=part_num tens, S=state units), or "bg_color12" (indicator +
+ * PRESSED) now hit the right LVGL 9 part/state combination.
+ *
+ * Widgets covered by the part table: BUTTON, LABEL, SWITCH, SLIDER, CHECKBOX,
+ * BAR (currently registered in hasp_object) + BTNMATRIX/ARC/SPINNER/ROLLER/
+ * DROPDOWN cases kept 1-в-1 with S3 so they Just Work when those widgets land
+ * in 3h-4. Types not in this table default to LV_PART_MAIN.
  *
  * NOT ported (deferred):
- *   - part parsing (attr suffixes .knob/.indicator/.items) — S3
- *     hasp_attribute_get_part_state; needs 3h widget PART table.
- *   - state parsing (:pressed/:checked/:focused suffix) — same helper.
  *   - text_font — needs font subsystem (FreeType + openhasp.ttf blob), 3h.
  *   - pattern_* — LVGL 9 has no direct pattern; bg_image_* is the replacement
  *     but the ATTR_ hashes map to LVGL 7 names; wire separately when needed.
@@ -437,12 +446,189 @@ static lv_text_decor_t parse_text_decor(const char* payload)
     return (lv_text_decor_t)atoi(payload);
 }
 
-static hasp_attribute_type_t attribute_local_style(lv_obj_t* obj, uint16_t attr_hash,
+/* Returns true iff `s` is non-empty AND every char is 0..9. Empty string →
+ * true (matches Parser::is_only_digits semantics from S3 hasp_parser.cpp:37;
+ * split_payload relies on this for the trailing-empty-position return). */
+static bool str_is_only_digits(const char* s)
+{
+    if (!*s) return true;
+    while (*s) { if (*s < '0' || *s > '9') return false; s++; }
+    return true;
+}
+
+/* S3 hasp_attribute_split_payload — scan char-by-char, return the position of
+ * the first substring that is only digits. Returns strlen(payload) when the
+ * attribute has no digit suffix. */
+static size_t hasp_attribute_split_payload(const char* payload)
+{
+    size_t pos = 0;
+    while (payload[pos] != '\0') {
+        if (str_is_only_digits(payload + pos)) return pos;
+        pos++;
+    }
+    return pos;
+}
+
+/* Map hasp part-num (LV_HASP_PART_* — 0/10/20/30/40/50/60/70/80/90) + widget
+ * type to LVGL 9 lv_part_t. Mirrors the widget-type switch in
+ * S3 hasp_attribute_get_part_state_new (S3 hasp_attribute.cpp:400..528). */
+static lv_part_t hasp_part_to_lv_part(lv_obj_t* obj, uint8_t part_num)
+{
+    switch (obj_get_type(obj)) {
+        case LV_HASP_SLIDER:
+        case LV_HASP_SWITCH:
+        case LV_HASP_ARC:
+            switch (part_num) {
+                case LV_HASP_PART_INDICATOR: return LV_PART_INDICATOR;
+                case LV_HASP_PART_KNOB:      return LV_PART_KNOB;
+                default:                     return LV_PART_MAIN;
+            }
+        case LV_HASP_BAR:
+        case LV_HASP_SPINNER:
+            return (part_num == LV_HASP_PART_INDICATOR) ? LV_PART_INDICATOR : LV_PART_MAIN;
+        case LV_HASP_CHECKBOX:
+            return (part_num == LV_HASP_PART_INDICATOR) ? LV_PART_INDICATOR : LV_PART_MAIN;
+        case LV_HASP_ROLLER:
+            return (part_num == LV_HASP_PART_SELECTED) ? LV_PART_SELECTED : LV_PART_MAIN;
+        case LV_HASP_DROPDOWN:
+            switch (part_num) {
+                case LV_HASP_PART_ITEMS:     return LV_PART_ITEMS;
+                case LV_HASP_PART_SELECTED:  return LV_PART_SELECTED;
+                case LV_HASP_PART_SCROLLBAR: return LV_PART_SCROLLBAR;
+                default:                     return LV_PART_MAIN;
+            }
+        case LV_HASP_BTNMATRIX:
+            return (part_num == LV_HASP_PART_ITEMS) ? LV_PART_ITEMS : LV_PART_MAIN;
+        default:
+            return LV_PART_MAIN;
+    }
+}
+
+/* New format (2-digit trailing) — S3 hasp_attribute_get_part_state_new
+ * (S3:347). Attribute like "bg_color12" splits to attr_out="bg_color",
+ * index=12 → state_num=2 (PRESSED), part_num=10 (INDICATOR). */
+static void hasp_attr_split_new(lv_obj_t* obj, const char* attr_in, char* attr_out, size_t out_sz,
+                                lv_part_t& part, lv_state_t& state)
+{
+    state = LV_STATE_DEFAULT;
+    part  = LV_PART_MAIN;
+
+    size_t pos = hasp_attribute_split_payload(attr_in);
+    if (pos == 0 || pos >= out_sz) { attr_out[0] = 0; return; }
+    strncpy(attr_out, attr_in, pos);
+    attr_out[pos] = 0;
+
+    int index         = atoi(attr_in + pos);
+    uint8_t state_num = (uint8_t)(index % 10);
+    uint8_t part_num  = (uint8_t)(index - state_num);
+
+    switch (state_num) {
+        case 1:  state = LV_STATE_CHECKED; break;
+        case 2:  state = LV_STATE_PRESSED; break;
+        case 3:  state = (lv_state_t)(LV_STATE_PRESSED | LV_STATE_CHECKED); break;
+        case 4:  state = LV_STATE_DISABLED; break;
+        case 5:  state = (lv_state_t)(LV_STATE_DISABLED | LV_STATE_CHECKED); break;
+        default: state = LV_STATE_DEFAULT;
+    }
+    part = hasp_part_to_lv_part(obj, part_num);
+}
+
+/* Old format (single-digit trailing or none) — S3 hasp_attribute_get_part_
+ * state_old (S3:531). Widget-specific: on SLIDER "bg_color1" = INDICATOR,
+ * "bg_color2" = KNOB. On BUTTON "bg_color1" = CHECKED state on MAIN. */
+static void hasp_attr_split_old(lv_obj_t* obj, const char* attr_in, char* attr_out, size_t out_sz,
+                                lv_part_t& part, lv_state_t& state)
+{
+    state = LV_STATE_DEFAULT;
+    part  = LV_PART_MAIN;
+
+    int len = (int)strlen(attr_in);
+    if (len <= 0 || (size_t)len >= out_sz) { attr_out[0] = 0; return; }
+
+    int index = atoi(&attr_in[len - 1]);
+    if (attr_in[len - 1] == '0') {
+        len--;
+    } else if (index > 0) {
+        len--;
+    } else {
+        index = -1; /* no digit suffix — plain attribute */
+    }
+    strncpy(attr_out, attr_in, len);
+    attr_out[len] = 0;
+
+    switch (obj_get_type(obj)) {
+        case LV_HASP_BUTTON:
+            switch (index) {
+                case 1: state = LV_STATE_CHECKED; break;
+                case 2: state = LV_STATE_PRESSED; break;
+                case 3: state = (lv_state_t)(LV_STATE_PRESSED | LV_STATE_CHECKED); break;
+                case 4: state = LV_STATE_DISABLED; break;
+                case 5: state = (lv_state_t)(LV_STATE_DISABLED | LV_STATE_CHECKED); break;
+                default: break;
+            }
+            break;
+        case LV_HASP_BTNMATRIX:
+            switch (index) {
+                case 0: part = LV_PART_ITEMS;                                       break;
+                case 1: part = LV_PART_ITEMS; state = LV_STATE_CHECKED;             break;
+                case 2: part = LV_PART_ITEMS; state = LV_STATE_PRESSED;             break;
+                case 3: part = LV_PART_ITEMS; state = (lv_state_t)(LV_STATE_PRESSED | LV_STATE_CHECKED); break;
+                case 4: part = LV_PART_ITEMS; state = LV_STATE_DISABLED;            break;
+                case 5: part = LV_PART_ITEMS; state = (lv_state_t)(LV_STATE_DISABLED | LV_STATE_CHECKED); break;
+                default: break;
+            }
+            break;
+        case LV_HASP_SLIDER:
+        case LV_HASP_SWITCH:
+        case LV_HASP_ARC:
+            if      (index == 1) part = LV_PART_INDICATOR;
+            else if (index == 2) part = LV_PART_KNOB;
+            break;
+        case LV_HASP_BAR:
+        case LV_HASP_SPINNER:
+            if (index == 1) part = LV_PART_INDICATOR;
+            break;
+        case LV_HASP_CHECKBOX:
+            if (index == 1) part = LV_PART_INDICATOR;
+            break;
+        case LV_HASP_ROLLER:
+            if (index == 1) part = LV_PART_SELECTED;
+            break;
+        default:
+            break;
+    }
+}
+
+/* S3 hasp_attribute_get_part_state (S3:702) — 2-digit trailing suffix picks
+ * new format, otherwise old. Populates attr_out (stripped attr name), part,
+ * state. Caller must re-hash attr_out via Parser::get_sdbm. */
+static void hasp_attr_get_part_state(lv_obj_t* obj, const char* attr_in, char* attr_out, size_t out_sz,
+                                     lv_part_t& part, lv_state_t& state)
+{
+    size_t pos = hasp_attribute_split_payload(attr_in);
+    if (strlen(attr_in + pos) == 2)
+        hasp_attr_split_new(obj, attr_in, attr_out, out_sz, part, state);
+    else
+        hasp_attr_split_old(obj, attr_in, attr_out, out_sz, part, state);
+}
+
+static hasp_attribute_type_t attribute_local_style(lv_obj_t* obj, const char* attr_p, uint16_t attr_hash,
                                                    const char* payload, bool update)
 {
+    /* S3 hasp_local_style_attr:731 — strip trailing part/state suffix, rehash
+     * the base name, build LVGL 9 selector. */
+    char       attr[32];
+    lv_part_t  part  = LV_PART_MAIN;
+    lv_state_t state = LV_STATE_DEFAULT;
+    hasp_attr_get_part_state(obj, attr_p, attr, sizeof(attr), part, state);
+    if (attr[0]) attr_hash = Parser::get_sdbm(attr);
+    /* LVGL 9 declares lv_part_t and lv_state_t as strong enums — direct
+     * `part | state` triggers -Werror=deprecated-enum-enum-conversion.
+     * Cast to uint32_t first (matches lv_style_selector_t underlying type). */
+    const lv_style_selector_t sel = (lv_style_selector_t)((uint32_t)part | (uint32_t)state);
+
     /* Numeric payload cached once — most branches want an int/uint8 val. */
     long ival = strtol(payload, nullptr, 10);
-    const lv_style_selector_t sel = LV_PART_MAIN; /* MVP: no part/state parsing yet */
 
     switch (attr_hash) {
 
@@ -744,8 +930,10 @@ void hasp_process_obj_attribute(lv_obj_t* obj, const char* attribute, const char
             break;
 
         default:
-            /* Fall through to local-style / per-widget attributes. */
-            ret = attribute_local_style(obj, attr_hash, payload, update);
+            /* Fall through to local-style / per-widget attributes. Pass raw
+             * attribute string so the callee can strip part/state suffix and
+             * rehash the base name (3h-1). */
+            ret = attribute_local_style(obj, attribute, attr_hash, payload, update);
             break;
     }
 

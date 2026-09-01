@@ -206,6 +206,19 @@ static void app_ui_init()
         hasp_dispatch_command("p1b4.radius=8");              // checkbox rounded
         hasp_dispatch_command("p1b5.opa_scale=255");         // slider fully opaque
 
+        // 3h-1 smoke — attribute suffixes drive LVGL 9 part/state selectors.
+        // Old format (single trailing digit — S3 hasp_attribute_get_part_state_old):
+        hasp_dispatch_command("p1b5.bg_color1=#00c800");     // slider INDICATOR → green fill
+        hasp_dispatch_command("p1b5.bg_color2=#ffffff");     // slider KNOB      → white
+        hasp_dispatch_command("p1b3.bg_color1=#c800c8");     // switch INDICATOR → magenta (checked track)
+        hasp_dispatch_command("p1b3.bg_color2=#ffff00");     // switch KNOB      → yellow
+        hasp_dispatch_command("p1b6.bg_color1=#ff00ff");     // bar INDICATOR    → magenta fill
+        hasp_dispatch_command("p1b4.bg_color1=#008000");     // checkbox INDICATOR → green bullet
+        // New format (2-digit trailing "PS" — S3 hasp_attribute_get_part_state_new):
+        hasp_dispatch_command("p1b5.border_width20=3");      // slider KNOB (part=20, state=0), border 3px
+        hasp_dispatch_command("p1b5.border_color20=#000000");
+        hasp_dispatch_command("p1b5.bg_color12=#ff8800");    // slider INDICATOR + PRESSED (part=10 state=2)
+
         // 3f smoke tests — synthesize LVGL events on registered objects so we
         // can prove the event handlers now emit real JSON via object_dispatch_state
         // (log line: "state pXbY => {...}"). Real touch on the panel triggers
