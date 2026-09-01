@@ -15,6 +15,10 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   bblanchon/arduinojson: ^7.4.3
+  # 3h-2: FreeType for HASP TTF fonts. LVGL 9 gets it via a
+  # target_link_libraries injection in the root CMakeLists.txt
+  # (managed lvgl__lvgl esp.cmake does not wire freetype itself).
+  espressif/freetype: "^2.14"
   espressif/esp_lcd_touch: '*'
   cezap/simple_ftp_server: ^1.0.0
   espressif/esp_lvgl_port: '*'

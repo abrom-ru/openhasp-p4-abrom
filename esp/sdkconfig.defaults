@@ -37,7 +37,10 @@ CONFIG_LV_DRAW_SW_SUPPORT_RGB565=y
 CONFIG_LV_DRAW_SW_DRAW_UNIT_CNT=2
 CONFIG_LV_DRAW_BUF_STRIDE_ALIGN=1
 CONFIG_LV_DRAW_BUF_ALIGN=4
-CONFIG_LV_DRAW_THREAD_STACK_SIZE=8192
+# FreeType/ThorVG требуют минимум 32KB стека draw-таска
+# (hard-check в lv_conf_internal.h). Было 8192 — factory-значение
+# без FreeType.
+CONFIG_LV_DRAW_THREAD_STACK_SIZE=32768
 CONFIG_LV_DRAW_LAYER_SIMPLE_BUF_SIZE=24576
 
 # Factory sets LV_ATTRIBUTE_FAST_MEM_USE_IRAM=y, but LVGL 9.5 declares the
@@ -55,8 +58,21 @@ CONFIG_LV_USE_LOG=y
 CONFIG_LV_LOG_LEVEL=LV_LOG_LEVEL_INFO
 CONFIG_LV_LOG_PRINTF=n
 
-# FreeType/ThorVG disabled (matches factory).
-CONFIG_LV_USE_FREETYPE=n
+# 3h-2: FreeType via espressif/freetype managed component (NOT via
+# LV_FREETYPE_USE_LVGL_PORT — that path clashes on hidden symbols
+# between liblvgl__lvgl.a and libfreetype.a; see
+# memory/project_hasp_step3h2_freetype_deadend.md).
+CONFIG_LV_USE_FREETYPE=y
+CONFIG_LV_FREETYPE_USE_LVGL_PORT=n
+CONFIG_LV_FREETYPE_CACHE_FT_GLYPH_CNT=256
+
+# 3h-2: LVGL FS driver on top of stdio → maps "L:xxx" to "/littlefs/xxx"
+# so lv_freetype_font_create("L:openhasp.ttf", ...) opens the TTF that
+# lives on the LittleFS 'storage' partition (mounted by hasp_fs at
+# /littlefs). ASCII 76 = 'L'.
+CONFIG_LV_USE_FS_STDIO=y
+CONFIG_LV_FS_STDIO_LETTER=76
+CONFIG_LV_FS_STDIO_PATH="/littlefs/"
 
 # Performance
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
