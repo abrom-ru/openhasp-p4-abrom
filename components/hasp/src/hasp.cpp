@@ -11,6 +11,7 @@
 #include "hasp_object.h"
 #include "hasp_page.h"
 #include "hasp_font.h"
+#include "hasp_theme.h"
 
 #include <ArduinoJson.h>
 #include "esp_log.h"
@@ -23,6 +24,11 @@ extern "C" esp_err_t hasp_init(void)
     /* 3h-2 stage 3: init FreeType before pages so labels created with a
      * text_font attribute in early jsonl can resolve the font. */
     font_setup();
+    /* 3h-3a: apply theme BEFORE creating page screens — matches S3
+     * haspSetup ordering (hasp.cpp:602 hasp_set_theme → hasp_init → pages).
+     * If we set the theme after objects exist LVGL 9 still restyles via
+     * lv_obj_report_style_change, but doing it first is cleaner and cheaper. */
+    hasp_set_theme(haspThemeId);
     /* 3b: allocate the N page screens and load page 1. Caller holds LVGL lock. */
     haspPages.init(PAGE_START_INDEX);
     return ESP_OK;
