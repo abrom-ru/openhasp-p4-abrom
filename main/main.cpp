@@ -235,6 +235,35 @@ static void app_ui_init()
         hasp_dispatch_command("p1b5.border_color20=#000000");
         hasp_dispatch_command("p1b5.bg_color12=#ff8800");    // slider INDICATOR + PRESSED (part=10 state=2)
 
+        // 3h-2 stage 4 smoke — ATTR_TEXT_FONT through the real dispatch path.
+        // Each command must NOT log "unknown attribute" and the label/button
+        // must visibly render in the requested size (openhasp.ttf via FreeType).
+        // - Numeric payload  → default openhasp.ttf @ size
+        // - "openhasp32"     → same file, alphanumeric split path in hasp_font
+        // The 24-size font is already cached from the earlier smoke block, so
+        // "text_font=24" should reuse it (no second "loaded" log line).
+        hasp_dispatch_command("p1b1.text_font=32");          // label → 32px openhasp
+        hasp_dispatch_command("p1b2.text_font=openhasp24");  // button → 24px openhasp (cache hit)
+        hasp_dispatch_command("p1b4.text_font=20");          // checkbox → 20px openhasp
+
+        // 3h-2 stage 5 smoke — Cyrillic through the full FreeType path.
+        // A brand-new label is created via jsonl (same route as production
+        // pages) with a Cyrillic UTF-8 payload AND text_font set at object-
+        // creation time (attribute_local_style catches text_font in the same
+        // hasp_new_object attribute loop). Success = glyphs rendered on
+        // panel, not tofu boxes. Failure modes to watch:
+        //   1. tofu → openhasp.ttf lacks Cyrillic glyph coverage (font file
+        //      problem, not code — swap TTF, keep pipeline)
+        //   2. "unknown attribute text_font" → stage-4 case wired to wrong
+        //      selector path (regression)
+        //   3. empty label → jsonl parser dropped `text` before attribute pass
+        //      (unrelated 3a bug)
+        hasp_dispatch_jsonl(
+            "{\"page\":1,\"id\":7,\"obj\":\"label\","
+            "\"x\":40,\"y\":260,\"w\":760,\"h\":50,"
+            "\"text\":\"Привет, openHASP! Проверка кириллицы 1234\","
+            "\"text_font\":\"openhasp28\"}");
+
         // 3f smoke tests — synthesize LVGL events on registered objects so we
         // can prove the event handlers now emit real JSON via object_dispatch_state
         // (log line: "state pXbY => {...}"). Real touch on the panel triggers

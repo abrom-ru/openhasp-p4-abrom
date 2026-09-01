@@ -46,6 +46,7 @@
 #include "hasp_attribute.h"
 #include "hasp_object.h"
 #include "hasp_parser.h"
+#include "hasp_font.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -832,6 +833,24 @@ static hasp_attribute_type_t attribute_local_style(lv_obj_t* obj, const char* at
         case ATTR_TEXT_DECOR:
             if (update) lv_obj_set_style_text_decor(obj, parse_text_decor(payload), sel);
             return HASP_ATTR_TYPE_INT;
+
+        /* ---------- Text font (3h-2 stage 4) ---------- */
+        /* Mirrors S3 hasp_attribute.cpp:890 (ATTR_TEXT_FONT in hasp_local_style_attr).
+         * Payload is delegated to get_font() (hasp_font.cpp): numeric → default
+         * openhasp.ttf @ size; "<name><size>" → /littlefs/<name>.ttf @ size.
+         * S3's LVGL 7-only fallbacks (hasp_get_font 0..7, unscii_8_icon,
+         * HASP_FONT_1..5) are intentionally NOT ported — the p4 build has no
+         * built-in bitmap fonts registered; every text_font resolves through
+         * FreeType.  S3 also set the same font on LV_DROPDOWN_PART_LIST/
+         * SELECTED for consistency; deferred here (dropdown-list styling is
+         * not in the 3h-4 batch 1 smoke path). */
+        case ATTR_TEXT_FONT: {
+            if (!update) return HASP_ATTR_TYPE_STR;
+            lv_font_t* font = get_font(payload);
+            if (!font) return HASP_ATTR_TYPE_STR;   /* logged inside get_font */
+            lv_obj_set_style_text_font(obj, font, sel);
+            return HASP_ATTR_TYPE_STR;
+        }
 
         /* ---------- Line ---------- */
         case ATTR_LINE_WIDTH:
