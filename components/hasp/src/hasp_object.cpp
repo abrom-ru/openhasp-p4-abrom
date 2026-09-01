@@ -25,40 +25,42 @@
 
 static const char* TAG = "hasp_obj";
 
-/* Stub attribute processor — 3a scope: x, y, w, h, text, val.
- * Mirrors call site src/hasp/hasp_object.cpp:743 (hasp_parse_json_attributes).
- * Real per-attribute switch by SDBM lives in hasp_attribute.cpp (S3) — comes in 3e.
+/* Stub attribute processor — 3d scope: x, y, w, h, text, val.
+ * Signature mirrors S3 hasp_attribute.cpp:2657 (obj, attr, const char* payload, bool update).
+ * Payload is a raw string — atoi/atof parse for numeric attrs. Real per-attribute
+ * switch by SDBM (~2000 lines in S3) comes in 3e; for now just the six MVP attrs.
+ * `update` flag (S3 semantics: true = write, false = query) — 3d honours it only as
+ * "skip on false" since read-back / MQTT publish lives in 3f.
  */
-static void hasp_process_obj_attribute_3a(lv_obj_t* obj, const char* attr, JsonVariantConst value)
+void hasp_process_obj_attribute(lv_obj_t* obj, const char* attr, const char* payload, bool update)
 {
-    if (!attr || !obj) return;
+    if (!attr || !obj || !payload) return;
+    if (!update) return; /* query semantics — 3f will publish current value */
 
-    if      (!strcasecmp(attr, "x"))    lv_obj_set_x(obj, value.as<int32_t>());
-    else if (!strcasecmp(attr, "y"))    lv_obj_set_y(obj, value.as<int32_t>());
-    else if (!strcasecmp(attr, "w"))    lv_obj_set_width(obj, value.as<int32_t>());
-    else if (!strcasecmp(attr, "h"))    lv_obj_set_height(obj, value.as<int32_t>());
+    if      (!strcasecmp(attr, "x"))    lv_obj_set_x(obj, (int32_t)atoi(payload));
+    else if (!strcasecmp(attr, "y"))    lv_obj_set_y(obj, (int32_t)atoi(payload));
+    else if (!strcasecmp(attr, "w"))    lv_obj_set_width(obj, (int32_t)atoi(payload));
+    else if (!strcasecmp(attr, "h"))    lv_obj_set_height(obj, (int32_t)atoi(payload));
     else if (!strcasecmp(attr, "text")) {
-        const char* txt = value.as<const char*>();
-        if (!txt) return;
         switch (obj_get_type(obj)) {
             case LV_HASP_LABEL:
-                lv_label_set_text(obj, txt);
+                lv_label_set_text(obj, payload);
                 break;
             case LV_HASP_CHECKBOX:
-                lv_checkbox_set_text(obj, txt);
+                lv_checkbox_set_text(obj, payload);
                 break;
             case LV_HASP_BUTTON: {
                 /* First (or only) child of a HASP button is its label — see
                  * button creation branch below where lv_label_create(obj) is called. */
                 lv_obj_t* lbl = lv_obj_get_child(obj, 0);
-                if (lbl) lv_label_set_text(lbl, txt);
+                if (lbl) lv_label_set_text(lbl, payload);
                 break;
             }
             default: break;
         }
     }
     else if (!strcasecmp(attr, "val")) {
-        int32_t v = value.as<int32_t>();
+        int32_t v = (int32_t)atoi(payload);
         switch (obj_get_type(obj)) {
             case LV_HASP_SLIDER:
                 lv_slider_set_value(obj, v, LV_ANIM_OFF);
@@ -74,15 +76,44 @@ static void hasp_process_obj_attribute_3a(lv_obj_t* obj, const char* attr, JsonV
             default: break;
         }
     }
-    /* Unknown attributes silently ignored in 3a (S3 logs a warning via
+    /* Unknown attributes silently ignored in 3d stub (S3 logs a warning via
      * hasp_attribute — added in 3e). */
+}
+
+/* Mirrors S3 hasp_object.cpp:166 — used by dispatch (`p1b2.text=...`). */
+void hasp_process_attribute(uint8_t pageid, uint8_t objid, const char* attr, const char* payload, bool update)
+{
+    lv_obj_t* obj = hasp_find_obj_from_page_id(pageid, objid);
+    if (!obj) {
+        ESP_LOGW(TAG, "unknown object p%ub%u", pageid, objid);
+        return;
+    }
+    hasp_process_obj_attribute(obj, attr, payload, update);
 }
 
 static int hasp_parse_json_attributes(lv_obj_t* obj, JsonObjectConst doc)
 {
     int i = 0;
+    /* Small on-stack buffer for numeric-to-string conversion. Sufficient for
+     * int/float attrs; strings pass through directly. */
+    char buf[32];
     for (JsonPairConst kv : doc) {
-        hasp_process_obj_attribute_3a(obj, kv.key().c_str(), kv.value());
+        JsonVariantConst v = kv.value();
+        const char* payload_str = nullptr;
+        if (v.is<const char*>()) {
+            payload_str = v.as<const char*>();
+        } else if (v.is<int32_t>() || v.is<long>() || v.is<unsigned int>()) {
+            snprintf(buf, sizeof(buf), "%ld", (long)v.as<int32_t>());
+            payload_str = buf;
+        } else if (v.is<float>() || v.is<double>()) {
+            snprintf(buf, sizeof(buf), "%g", v.as<double>());
+            payload_str = buf;
+        } else if (v.is<bool>()) {
+            payload_str = v.as<bool>() ? "1" : "0";
+        }
+        if (payload_str) {
+            hasp_process_obj_attribute(obj, kv.key().c_str(), payload_str, true);
+        }
         i++;
     }
     return i;

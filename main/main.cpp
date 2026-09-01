@@ -21,6 +21,7 @@
 #include "periph_ledc.h"
 
 #include "hasp.hpp"
+#include "hasp_dispatch.h"
 #include "hasp_fs.hpp"
 #include "hasp_ftp.hpp"
 #include "hasp_http.hpp"
@@ -151,19 +152,22 @@ static void app_ui_init()
             "{\"page\":2,\"id\":2,\"obj\":\"slider\","
             "\"x\":40,\"y\":100,\"w\":400,\"h\":20,\"val\":80}");
 
-        // 3c smoke test: no `obj` field -> registry lookup must find p1b1 (label)
-        // and update its text. Expect boot log "reuse p1b1" and label reading "3c".
-        hasp_dispatch_jsonl(
-            "{\"page\":1,\"id\":1,\"text\":\"HASP 3c: registry lookup OK\"}");
-        // Same for slider on page 2: update val without recreating.
-        hasp_dispatch_jsonl(
-            "{\"page\":2,\"id\":2,\"val\":25}");
+        // 3d smoke tests via hasp_dispatch_command (text commands, not jsonl):
+        //  - pXbY.attr=value  -> parsed, routed to hasp_process_attribute
+        //  - "page N"         -> haspPages.set(N)
+        // Expected log: "reuse p1b1" (label text update via dispatch), no warnings.
+        hasp_dispatch_command("p1b1.text=HASP 3d: dispatch OK");
+        hasp_dispatch_command("p2b2.val=25");
+        // Also exercise jsonl and json array paths through the same entry point.
+        hasp_dispatch_command("{\"page\":1,\"id\":6,\"val\":50}"); // update bar via jsonl
+        hasp_dispatch_command("[\"p1b5.val=90\", \"p1b3.val=0\"]"); // json array of cmds
 
-        // 3b demo: auto-toggle pages 1<->2 every 4s (proves haspPages.set works).
-        // Real dispatch of the `page N` command lives in 3d; this is a temporary probe.
+        // 3d demo: auto-toggle pages 1<->2 via dispatch every 4s (proves the
+        // "page N" text command reaches haspPages.set()). Real invocation
+        // path in 3f/4 will be MQTT/console -> hasp_dispatch_command.
         lv_timer_t* t = lv_timer_create([](lv_timer_t* /*t*/) {
             uint8_t cur = hasp_get_page();
-            hasp_set_page(cur == 1 ? 2 : 1);
+            hasp_dispatch_command(cur == 1 ? "page 2" : "page 1");
         }, 4000, nullptr);
         (void)t;
 
