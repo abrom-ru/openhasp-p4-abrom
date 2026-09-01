@@ -178,6 +178,34 @@ static void app_ui_init()
         hasp_dispatch_command("p2b1.hidden=1");           // page-2 label hidden on entry
         hasp_dispatch_command("p2b1.hidden=0");           // ... then shown again
 
+        // 3g smoke tests — exercise the expanded local-style table (radius,
+        // border, shadow, outline, padding, bg gradient, text spacing, line).
+        // Each command must set the property with NO "unknown attribute" warning;
+        // the effect should be visible on the panel (rounded corners, shadow,
+        // gradient background on p1b6, etc.). Selector is LV_PART_MAIN for MVP.
+        hasp_dispatch_command("p1b2.radius=18");            // button: rounded corners
+        hasp_dispatch_command("p1b2.border_width=3");
+        hasp_dispatch_command("p1b2.border_color=#ff0000"); // red border
+        hasp_dispatch_command("p1b2.border_side=full");
+        hasp_dispatch_command("p1b2.shadow_width=12");
+        hasp_dispatch_command("p1b2.shadow_ofs_x=4");
+        hasp_dispatch_command("p1b2.shadow_ofs_y=4");
+        hasp_dispatch_command("p1b2.shadow_color=#000000");
+        hasp_dispatch_command("p1b2.shadow_opa=200");
+        hasp_dispatch_command("p1b2.outline_width=2");
+        hasp_dispatch_command("p1b2.outline_pad=4");
+        hasp_dispatch_command("p1b2.outline_color=#ffff00"); // yellow outline
+        hasp_dispatch_command("p1b6.bg_color=#004080");      // bar bg base
+        hasp_dispatch_command("p1b6.bg_grad_color=#ff8000"); // orange gradient stop
+        hasp_dispatch_command("p1b6.bg_grad_dir=hor");       // horizontal gradient
+        hasp_dispatch_command("p1b1.pad_left=12");           // label padding
+        hasp_dispatch_command("p1b1.pad_top=6");
+        hasp_dispatch_command("p1b1.text_letter_space=2");
+        hasp_dispatch_command("p1b1.text_line_space=4");
+        hasp_dispatch_command("p1b1.text_decor=underline");
+        hasp_dispatch_command("p1b4.radius=8");              // checkbox rounded
+        hasp_dispatch_command("p1b5.opa_scale=255");         // slider fully opaque
+
         // 3f smoke tests — synthesize LVGL events on registered objects so we
         // can prove the event handlers now emit real JSON via object_dispatch_state
         // (log line: "state pXbY => {...}"). Real touch on the panel triggers

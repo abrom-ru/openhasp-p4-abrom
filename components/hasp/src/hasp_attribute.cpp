@@ -369,32 +369,301 @@ static hasp_attribute_type_t attribute_common_method(lv_obj_t* obj, uint16_t att
     return HASP_ATTR_TYPE_METHOD_OK;
 }
 
-/* ==================== local style: colors (S3:721 subset) ==================== */
+/* ==================== local style: full table (S3:721 → LVGL 9) ==============
+ * 3g scope: expand attribute_local_style from 2-color stub → LVGL 9 port of
+ * `hasp_local_style_attr()` (S3 hasp_attribute.cpp:721..1200-ish, ~60 style
+ * props). We keep S3 semantics (parse payload → lv_obj_set_style_*, return
+ * HASP_ATTR_TYPE_*) but MVP restricts the LVGL 9 selector to `LV_PART_MAIN`.
+ *
+ * NOT ported (deferred):
+ *   - part parsing (attr suffixes .knob/.indicator/.items) — S3
+ *     hasp_attribute_get_part_state; needs 3h widget PART table.
+ *   - state parsing (:pressed/:checked/:focused suffix) — same helper.
+ *   - text_font — needs font subsystem (FreeType + openhasp.ttf blob), 3h.
+ *   - pattern_* — LVGL 9 has no direct pattern; bg_image_* is the replacement
+ *     but the ATTR_ hashes map to LVGL 7 names; wire separately when needed.
+ *   - value_* — LVGL 7-only style category; no LVGL 9 equivalent.
+ *   - scale_* — arc/meter scales, land with 3h widget expansion.
+ *   - transform angle/zoom → LVGL 9 has rotation/scale_x/scale_y (different
+ *     API); wire when we add images.
+ *   - blend_mode branches — rarely used, deferred.
+ *   - get path (update=false) publishes nothing yet — MQTT get pipe is step 4.
+ *
+ * LVGL 7 → 9 name changes applied here:
+ *   shadow_ofs_x/y   → shadow_offset_x/y
+ *   img_opa/recolor  → image_opa/recolor
+ *   opa_scale        → opa (same effect since v8)
+ *   pad_inner        → pad_row + pad_column (LVGL 9 splits axes)
+ */
+
+/* Payload → lv_color_t. Returns false on parse failure. */
+static bool parse_color(const char* payload, lv_color_t& out)
+{
+    lv_color32_t c;
+    if (!Parser::haspPayloadToColor(payload, c)) return false;
+    out = lv_color_make(c.red, c.green, c.blue);
+    return true;
+}
+
+/* Payload → lv_grad_dir_t (accepts "none"/"hor"/"ver" or numeric 0/1/2). */
+static lv_grad_dir_t parse_grad_dir(const char* payload)
+{
+    if      (!strcasecmp(payload, "none")) return LV_GRAD_DIR_NONE;
+    else if (!strcasecmp(payload, "hor"))  return LV_GRAD_DIR_HOR;
+    else if (!strcasecmp(payload, "ver"))  return LV_GRAD_DIR_VER;
+    return (lv_grad_dir_t)atoi(payload);
+}
+
+/* Payload → lv_border_side_t. Accepts named ("top"/"bottom"/"left"/"right"/
+ * "full"/"none") or numeric mask (S3 style — 0=NONE, 15=FULL). */
+static lv_border_side_t parse_border_side(const char* payload)
+{
+    if      (!strcasecmp(payload, "none"))   return LV_BORDER_SIDE_NONE;
+    else if (!strcasecmp(payload, "top"))    return LV_BORDER_SIDE_TOP;
+    else if (!strcasecmp(payload, "bottom")) return LV_BORDER_SIDE_BOTTOM;
+    else if (!strcasecmp(payload, "left"))   return LV_BORDER_SIDE_LEFT;
+    else if (!strcasecmp(payload, "right"))  return LV_BORDER_SIDE_RIGHT;
+    else if (!strcasecmp(payload, "full"))   return LV_BORDER_SIDE_FULL;
+    return (lv_border_side_t)atoi(payload);
+}
+
+/* Payload → lv_text_decor_t bitmask. Accepts named ("none"/"underline"/
+ * "strikethrough") or numeric (S3: 0/1/2). */
+static lv_text_decor_t parse_text_decor(const char* payload)
+{
+    if      (!strcasecmp(payload, "none"))          return LV_TEXT_DECOR_NONE;
+    else if (!strcasecmp(payload, "underline"))     return LV_TEXT_DECOR_UNDERLINE;
+    else if (!strcasecmp(payload, "strikethrough")) return LV_TEXT_DECOR_STRIKETHROUGH;
+    return (lv_text_decor_t)atoi(payload);
+}
 
 static hasp_attribute_type_t attribute_local_style(lv_obj_t* obj, uint16_t attr_hash,
                                                    const char* payload, bool update)
 {
-    /* MVP: the two colors people set 99% of the time. Everything else falls
-     * through to NOT_FOUND — will be filled in 3g when we port the full
-     * property table. */
+    /* Numeric payload cached once — most branches want an int/uint8 val. */
+    long ival = strtol(payload, nullptr, 10);
+    const lv_style_selector_t sel = LV_PART_MAIN; /* MVP: no part/state parsing yet */
+
     switch (attr_hash) {
+
+        /* ---------- Object / general ---------- */
+        case ATTR_RADIUS:
+            if (update) lv_obj_set_style_radius(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
+        case ATTR_CLIP_CORNER:
+            if (update) lv_obj_set_style_clip_corner(obj, ival != 0, sel);
+            return HASP_ATTR_TYPE_BOOL;
+
+        case ATTR_OPA_SCALE: /* LVGL 7 alias — LVGL 9 uses opa uniformly. */
+            if (update) lv_obj_set_style_opa(obj, (lv_opa_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
+        case ATTR_TRANSFORM_WIDTH:
+            if (update) lv_obj_set_style_transform_width(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
+        case ATTR_TRANSFORM_HEIGHT:
+            if (update) lv_obj_set_style_transform_height(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
+        /* ---------- Background ---------- */
         case ATTR_BG_COLOR: {
             if (update) {
-                lv_color32_t c;
-                if (!Parser::haspPayloadToColor(payload, c)) return HASP_ATTR_TYPE_COLOR_INVALID;
-                lv_obj_set_style_bg_color(obj, lv_color_make(c.red, c.green, c.blue), LV_PART_MAIN);
-                lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
+                lv_color_t col;
+                if (!parse_color(payload, col)) return HASP_ATTR_TYPE_COLOR_INVALID;
+                lv_obj_set_style_bg_color(obj, col, sel);
+                /* Default bg_opa on unstyled objects is 0 → color would be invisible.
+                 * S3 also forced OPA_COVER here for convenience (hasp_attribute.cpp:781). */
+                lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, sel);
             }
             return HASP_ATTR_TYPE_COLOR;
         }
+        case ATTR_BG_GRAD_COLOR: {
+            if (update) {
+                lv_color_t col;
+                if (!parse_color(payload, col)) return HASP_ATTR_TYPE_COLOR_INVALID;
+                lv_obj_set_style_bg_grad_color(obj, col, sel);
+            }
+            return HASP_ATTR_TYPE_COLOR;
+        }
+        case ATTR_BG_OPA:
+            if (update) lv_obj_set_style_bg_opa(obj, (lv_opa_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_BG_GRAD_DIR:
+            if (update) lv_obj_set_style_bg_grad_dir(obj, parse_grad_dir(payload), sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_BG_MAIN_STOP:
+            if (update) lv_obj_set_style_bg_main_stop(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_BG_GRAD_STOP:
+            if (update) lv_obj_set_style_bg_grad_stop(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
+        /* ---------- Padding (LVGL 9 splits pad_inner into pad_row+pad_column) ---- */
+        case ATTR_PAD_TOP:
+            if (update) lv_obj_set_style_pad_top(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_PAD_BOTTOM:
+            if (update) lv_obj_set_style_pad_bottom(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_PAD_LEFT:
+            if (update) lv_obj_set_style_pad_left(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_PAD_RIGHT:
+            if (update) lv_obj_set_style_pad_right(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_PAD_INNER:
+            /* LVGL 9 has no single "inner" — apply the same value to both axes. */
+            if (update) {
+                lv_obj_set_style_pad_row(obj, (int32_t)ival, sel);
+                lv_obj_set_style_pad_column(obj, (int32_t)ival, sel);
+            }
+            return HASP_ATTR_TYPE_INT;
+
+        /* ---------- Margin ---------- */
+        case ATTR_MARGIN_TOP:
+            if (update) lv_obj_set_style_margin_top(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_MARGIN_BOTTOM:
+            if (update) lv_obj_set_style_margin_bottom(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_MARGIN_LEFT:
+            if (update) lv_obj_set_style_margin_left(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_MARGIN_RIGHT:
+            if (update) lv_obj_set_style_margin_right(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
+        /* ---------- Border ---------- */
+        case ATTR_BORDER_WIDTH:
+            if (update) lv_obj_set_style_border_width(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_BORDER_COLOR: {
+            if (update) {
+                lv_color_t col;
+                if (!parse_color(payload, col)) return HASP_ATTR_TYPE_COLOR_INVALID;
+                lv_obj_set_style_border_color(obj, col, sel);
+            }
+            return HASP_ATTR_TYPE_COLOR;
+        }
+        case ATTR_BORDER_OPA:
+            if (update) lv_obj_set_style_border_opa(obj, (lv_opa_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_BORDER_SIDE:
+            if (update) lv_obj_set_style_border_side(obj, parse_border_side(payload), sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_BORDER_POST:
+            if (update) lv_obj_set_style_border_post(obj, ival != 0, sel);
+            return HASP_ATTR_TYPE_BOOL;
+
+        /* ---------- Outline ---------- */
+        case ATTR_OUTLINE_WIDTH:
+            if (update) lv_obj_set_style_outline_width(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_OUTLINE_PAD:
+            if (update) lv_obj_set_style_outline_pad(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_OUTLINE_COLOR: {
+            if (update) {
+                lv_color_t col;
+                if (!parse_color(payload, col)) return HASP_ATTR_TYPE_COLOR_INVALID;
+                lv_obj_set_style_outline_color(obj, col, sel);
+            }
+            return HASP_ATTR_TYPE_COLOR;
+        }
+        case ATTR_OUTLINE_OPA:
+            if (update) lv_obj_set_style_outline_opa(obj, (lv_opa_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
+        /* ---------- Shadow (LVGL 9: ofs → offset) ---------- */
+        case ATTR_SHADOW_WIDTH:
+            if (update) lv_obj_set_style_shadow_width(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_SHADOW_OFS_X:
+            if (update) lv_obj_set_style_shadow_offset_x(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_SHADOW_OFS_Y:
+            if (update) lv_obj_set_style_shadow_offset_y(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_SHADOW_SPREAD:
+            if (update) lv_obj_set_style_shadow_spread(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_SHADOW_COLOR: {
+            if (update) {
+                lv_color_t col;
+                if (!parse_color(payload, col)) return HASP_ATTR_TYPE_COLOR_INVALID;
+                lv_obj_set_style_shadow_color(obj, col, sel);
+            }
+            return HASP_ATTR_TYPE_COLOR;
+        }
+        case ATTR_SHADOW_OPA:
+            if (update) lv_obj_set_style_shadow_opa(obj, (lv_opa_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
+        /* ---------- Text (font deferred — needs FreeType, 3h) ---------- */
         case ATTR_TEXT_COLOR: {
             if (update) {
-                lv_color32_t c;
-                if (!Parser::haspPayloadToColor(payload, c)) return HASP_ATTR_TYPE_COLOR_INVALID;
-                lv_obj_set_style_text_color(obj, lv_color_make(c.red, c.green, c.blue), LV_PART_MAIN);
+                lv_color_t col;
+                if (!parse_color(payload, col)) return HASP_ATTR_TYPE_COLOR_INVALID;
+                lv_obj_set_style_text_color(obj, col, sel);
             }
             return HASP_ATTR_TYPE_COLOR;
         }
+        case ATTR_TEXT_OPA:
+            if (update) lv_obj_set_style_text_opa(obj, (lv_opa_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_TEXT_LETTER_SPACE:
+            if (update) lv_obj_set_style_text_letter_space(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_TEXT_LINE_SPACE:
+            if (update) lv_obj_set_style_text_line_space(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_TEXT_DECOR:
+            if (update) lv_obj_set_style_text_decor(obj, parse_text_decor(payload), sel);
+            return HASP_ATTR_TYPE_INT;
+
+        /* ---------- Line ---------- */
+        case ATTR_LINE_WIDTH:
+            if (update) lv_obj_set_style_line_width(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_LINE_DASH_WIDTH:
+            if (update) lv_obj_set_style_line_dash_width(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_LINE_DASH_GAP:
+            if (update) lv_obj_set_style_line_dash_gap(obj, (int32_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_LINE_ROUNDED:
+            if (update) lv_obj_set_style_line_rounded(obj, ival != 0, sel);
+            return HASP_ATTR_TYPE_BOOL;
+        case ATTR_LINE_COLOR: {
+            if (update) {
+                lv_color_t col;
+                if (!parse_color(payload, col)) return HASP_ATTR_TYPE_COLOR_INVALID;
+                lv_obj_set_style_line_color(obj, col, sel);
+            }
+            return HASP_ATTR_TYPE_COLOR;
+        }
+        case ATTR_LINE_OPA:
+            if (update) lv_obj_set_style_line_opa(obj, (lv_opa_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
+        /* ---------- Image (LVGL 9 renamed img_ → image_) ---------- */
+        case ATTR_IMAGE_RECOLOR: {
+            if (update) {
+                lv_color_t col;
+                if (!parse_color(payload, col)) return HASP_ATTR_TYPE_COLOR_INVALID;
+                lv_obj_set_style_image_recolor(obj, col, sel);
+            }
+            return HASP_ATTR_TYPE_COLOR;
+        }
+        case ATTR_IMAGE_OPA:
+            if (update) lv_obj_set_style_image_opa(obj, (lv_opa_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+        case ATTR_IMAGE_RECOLOR_OPA:
+            if (update) lv_obj_set_style_image_recolor_opa(obj, (lv_opa_t)ival, sel);
+            return HASP_ATTR_TYPE_INT;
+
         default:
             return HASP_ATTR_TYPE_NOT_FOUND;
     }
