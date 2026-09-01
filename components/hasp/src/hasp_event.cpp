@@ -91,6 +91,11 @@ static void event_object_evt_event(lv_obj_t* obj, uint8_t hasp_event_id)
 /**
  * Clean-up allocated memory before an object is deleted.
  * Mirrors src/hasp/hasp_event.cpp:68 delete_event_handler().
+ *
+ * 3h-4: also frees the `extra` slot (LINE points array, etc.). Widget-specific
+ * per-type cleanups (my_btnmatrix_map_clear/my_msgbox_map_clear/my_image_release_
+ * resources) from S3 are subsumed by the generic free(extra) — buttonmatrix map
+ * and line points are plain heap arrays we own; image src is const-refed by LVGL.
  */
 void delete_event_handler(lv_event_t* e)
 {
@@ -98,6 +103,7 @@ void delete_event_handler(lv_event_t* e)
     lv_obj_t* obj = static_cast<lv_obj_t*>(lv_event_get_target(e));
     hasp_obj_user_data_t* ud = hasp_obj_ud(obj);
     if (ud) {
+        if (ud->extra) { free(ud->extra); ud->extra = nullptr; }
         lv_obj_set_user_data(obj, nullptr);
         free(ud);
     }
@@ -162,10 +168,102 @@ void slider_event_handler(lv_event_t* e)
     lv_obj_t* obj = static_cast<lv_obj_t*>(lv_event_get_target(e));
 
     long val = 0;
-    if (obj_check_type(obj, LV_HASP_SLIDER)) {
-        val = lv_slider_get_value(obj);
+    switch (obj_get_type(obj)) {
+        case LV_HASP_SLIDER: val = lv_slider_get_value(obj); break;
+        case LV_HASP_ARC:    val = lv_arc_get_value(obj);    break;   /* 3h-4 */
+        default: return;
     }
-    /* LV_HASP_ARC branch will come with 3g; not in scope now. */
 
     event_object_val_event(obj, hasp_event_id, val);
+}
+
+/* ==================== 3h-4 handlers ==================== */
+
+/* Mirrors src/hasp/hasp_event.cpp:610 selector_event_handler — dropdown/roller.
+ * S3 also handles tabview/table here; those widgets land in a later 3h-4 batch,
+ * so the switch defaults to `return` for unsupported selectors. */
+void selector_event_handler(lv_event_t* e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_DELETE) { delete_event_handler(e); return; }
+
+    uint8_t hasp_event_id;
+    if (!translate_event(code, hasp_event_id)) return;
+
+    lv_obj_t* obj = static_cast<lv_obj_t*>(lv_event_get_target(e));
+
+    char     buffer[128] = {0};
+    uint32_t val         = 0;
+
+    switch (obj_get_type(obj)) {
+        case LV_HASP_DROPDOWN:
+            val = lv_dropdown_get_selected(obj);
+            lv_dropdown_get_selected_str(obj, buffer, sizeof(buffer));
+            break;
+        case LV_HASP_ROLLER:
+            val = lv_roller_get_selected(obj);
+            lv_roller_get_selected_str(obj, buffer, sizeof(buffer));
+            break;
+        default:
+            return; /* tabview/table — pending later 3h-4 batch */
+    }
+
+    /* Mirrors S3 event_object_selection_changed (S3 hasp_event.cpp:249) —
+     * "{event, val, text}" JSON. */
+    char eventname[8];
+    Parser::get_event_name(hasp_event_id, eventname, sizeof(eventname));
+
+    char data[192];
+    snprintf(data, sizeof(data), "{\"event\":\"%s\",\"val\":%u,\"text\":\"%s\"}",
+             eventname, (unsigned)val, buffer);
+    event_send_object_data(obj, data);
+}
+
+/* Mirrors src/hasp/hasp_event.cpp:733 btnmatrix_event_handler.
+ * LVGL 9 rename: lv_btnmatrix_get_active_btn/text → lv_buttonmatrix_get_selected_
+ * button/button_text; LV_BTNMATRIX_BTN_NONE → LV_BUTTONMATRIX_BUTTON_NONE. */
+void btnmatrix_event_handler(lv_event_t* e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_DELETE) { delete_event_handler(e); return; }
+
+    uint8_t hasp_event_id;
+    if (!translate_event(code, hasp_event_id)) return;
+
+    lv_obj_t* obj = static_cast<lv_obj_t*>(lv_event_get_target(e));
+
+    uint32_t val = lv_buttonmatrix_get_selected_button(obj);
+    const char* txt = (val != LV_BUTTONMATRIX_BUTTON_NONE)
+                          ? lv_buttonmatrix_get_button_text(obj, val)
+                          : "";
+    if (!txt) txt = "";
+
+    char eventname[8];
+    Parser::get_event_name(hasp_event_id, eventname, sizeof(eventname));
+
+    char data[192];
+    snprintf(data, sizeof(data), "{\"event\":\"%s\",\"val\":%u,\"text\":\"%s\"}",
+             eventname, (unsigned)val, txt);
+    event_send_object_data(obj, data);
+}
+
+/* Mirrors src/hasp/hasp_event.cpp:440 textarea_event_handler.
+ * Focus/defocus hide-cursor branches are LVGL 7 only — LVGL 9 shows the cursor
+ * automatically on focus and hides it on defocus, so we drop that logic. */
+void textarea_event_handler(lv_event_t* e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_DELETE) { delete_event_handler(e); return; }
+    if (code != LV_EVENT_VALUE_CHANGED) return;
+
+    lv_obj_t*   obj = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    const char* txt = lv_textarea_get_text(obj);
+    if (!txt) txt = "";
+
+    char eventname[8];
+    Parser::get_event_name(HASP_EVENT_CHANGED, eventname, sizeof(eventname));
+
+    char data[512];
+    snprintf(data, sizeof(data), "{\"event\":\"%s\",\"text\":\"%s\"}", eventname, txt);
+    event_send_object_data(obj, data);
 }

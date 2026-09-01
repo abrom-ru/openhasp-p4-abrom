@@ -24,11 +24,19 @@ static const char FP_GROUPID[]  = "groupid";
 
 /* Per-object HASP metadata. Allocated per-object, pointed to by
  * lv_obj_get_user_data(). Freed in delete_event_handler on LV_EVENT_DELETE.
- * Fields mirror the S3 `lv_obj_user_data_t` bit-field struct. */
+ * Fields mirror the S3 `lv_obj_user_data_t` bit-field struct.
+ *
+ * 3h-4: `extra` slot holds widget-specific heap resource that needs
+ * lifetime tied to the LVGL object — currently LINE points array
+ * (freed unconditionally in delete_event_handler via free()). If a
+ * future widget needs a non-free()-able resource, promote to a
+ * discriminated struct instead.
+ */
 typedef struct {
     uint8_t id;
     uint8_t objid;      // lv_hasp_obj_type_t
     uint8_t groupid;
+    void*   extra;      // widget-specific heap resource (line points, …)
 } hasp_obj_user_data_t;
 
 /* HASP object type ids — copied verbatim from src/hasp/hasp_object.h:41 */

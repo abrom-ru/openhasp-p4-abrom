@@ -242,12 +242,48 @@ static void app_ui_init()
             }
         }
 
-        // 3d demo: auto-toggle pages 1<->2 via dispatch every 4s (proves the
+        // 3h-4 batch 1 smoke — 9 new widgets on a fresh page (page 3 to keep
+        // 1/2 untouched). After boot the page-cycle timer below rotates
+        // 1→2→3 so all get on-screen verification.
+        hasp_dispatch_jsonl(
+            "{\"page\":3,\"id\":1,\"obj\":\"label\","
+            "\"x\":40,\"y\":10,\"w\":600,\"h\":30,\"text\":\"HASP 3h-4 batch 1 - page 3\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":3,\"id\":10,\"obj\":\"arc\","
+            "\"x\":40,\"y\":50,\"w\":150,\"h\":150,\"val\":30,\"min\":0,\"max\":100}");
+        hasp_dispatch_jsonl(
+            "{\"page\":3,\"id\":11,\"obj\":\"led\","
+            "\"x\":220,\"y\":60,\"w\":40,\"h\":40,\"bg_color\":\"#00ff00\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":3,\"id\":14,\"obj\":\"spinner\","
+            "\"x\":300,\"y\":50,\"w\":80,\"h\":80}");
+        hasp_dispatch_jsonl(
+            "{\"page\":3,\"id\":17,\"obj\":\"line\","
+            "\"x\":420,\"y\":40,\"w\":200,\"h\":120,"
+            "\"points\":\"10,10;100,10;100,100;10,100;10,10\","
+            "\"line_color\":\"#ff0000\",\"line_width\":3}");
+        hasp_dispatch_jsonl(
+            "{\"page\":3,\"id\":12,\"obj\":\"dropdown\","
+            "\"x\":40,\"y\":220,\"w\":150,\"options\":\"Apple\\nBanana\\nCherry\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":3,\"id\":13,\"obj\":\"roller\","
+            "\"x\":220,\"y\":220,\"w\":120,\"h\":140,\"options\":\"1\\n2\\n3\\n4\\n5\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":3,\"id\":16,\"obj\":\"textarea\","
+            "\"x\":380,\"y\":220,\"w\":260,\"h\":80,\"text\":\"hello 3h-4\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":3,\"id\":15,\"obj\":\"btnmatrix\","
+            "\"x\":40,\"y\":380,\"w\":600,\"h\":120}");
+
+        // 3d demo: auto-toggle pages 1→2→3 via dispatch every 4s (proves the
         // "page N" text command reaches haspPages.set()). Real invocation
         // path in 3f/4 will be MQTT/console -> hasp_dispatch_command.
         lv_timer_t* t = lv_timer_create([](lv_timer_t* /*t*/) {
             uint8_t cur = hasp_get_page();
-            hasp_dispatch_command(cur == 1 ? "page 2" : "page 1");
+            uint8_t nxt = (cur >= 3) ? 1 : (cur + 1);
+            char cmd[16];
+            snprintf(cmd, sizeof(cmd), "page %u", nxt);
+            hasp_dispatch_command(cmd);
         }, 4000, nullptr);
         (void)t;
 

@@ -274,8 +274,124 @@ void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id)
                 break;
             }
 
+            /* ----- 3h-4 batch 1: arc / led / image / line / dropdown /
+             *                     roller / spinner / btnmatrix / textarea ---- */
+
+            /* ARC — S3 hasp_object.cpp:391. Uses slider_event_handler
+             * (extended in 3h-4 with LV_HASP_ARC branch). */
+            case LV_HASP_ARC:
+            case HASP_OBJ_ARC: {
+                obj = lv_arc_create(parent_obj);
+                if (obj) {
+                    cb    = slider_event_handler;
+                    objid = LV_HASP_ARC;
+                }
+                break;
+            }
+
+            /* LED — S3 hasp_object.cpp:438. Reports touch events via generic. */
+            case LV_HASP_LED:
+            case HASP_OBJ_LED: {
+                obj = lv_led_create(parent_obj);
+                if (obj) {
+                    cb    = generic_event_handler;
+                    objid = LV_HASP_LED;
+                }
+                break;
+            }
+
+            /* IMAGE — S3 hasp_object.cpp:371 (lv_img_create → lv_image_create). */
+            case LV_HASP_IMAGE:
+            case HASP_OBJ_IMG: {
+                obj = lv_image_create(parent_obj);
+                if (obj) {
+                    cb    = generic_event_handler;
+                    objid = LV_HASP_IMAGE;
+                }
+                break;
+            }
+
+            /* LINE — S3 hasp_object.cpp:553. Delete-hook (extra slot) frees
+             * the points buffer allocated by ATTR_POINTS. */
+            case LV_HASP_LINE:
+            case HASP_OBJ_LINE: {
+                obj = lv_line_create(parent_obj);
+                if (obj) {
+                    /* S3 sets line_width=1 via LVGL 7 local style. Do the same
+                     * in LVGL 9 (default is 0 → invisible). */
+                    lv_obj_set_style_line_width(obj, 1, LV_PART_MAIN);
+                    cb    = generic_event_handler;
+                    objid = LV_HASP_LINE;
+                }
+                break;
+            }
+
+            /* DROPDOWN — S3 hasp_object.cpp:639. */
+            case LV_HASP_DROPDOWN:
+            case HASP_OBJ_DROPDOWN: {
+                obj = lv_dropdown_create(parent_obj);
+                if (obj) {
+                    lv_dropdown_set_text(obj, NULL); /* clear default "..." */
+                    /* LVGL 9 has no lv_dropdown_set_draw_arrow — arrow is set
+                     * via lv_dropdown_set_symbol (defaults to LV_SYMBOL_DOWN). */
+                    cb    = selector_event_handler;
+                    objid = LV_HASP_DROPDOWN;
+                }
+                break;
+            }
+
+            /* ROLLER — S3 hasp_object.cpp:653. LVGL 9 dropped set_auto_fit —
+             * roller sizes to `visible_row_count` explicitly. */
+            case LV_HASP_ROLLER:
+            case HASP_OBJ_ROLLER: {
+                obj = lv_roller_create(parent_obj);
+                if (obj) {
+                    cb    = selector_event_handler;
+                    objid = LV_HASP_ROLLER;
+                }
+                break;
+            }
+
+            /* SPINNER — S3 hasp_object.cpp:520. LVGL 9 signature is
+             * lv_spinner_create(parent) then set_anim_params(t, angle). */
+            case LV_HASP_SPINNER:
+            case HASP_OBJ_SPINNER: {
+                obj = lv_spinner_create(parent_obj);
+                if (obj) {
+                    lv_spinner_set_anim_params(obj, 1000, 60);
+                    cb    = generic_event_handler;
+                    objid = LV_HASP_SPINNER;
+                }
+                break;
+            }
+
+            /* BTNMATRIX — S3 hasp_object.cpp:296. LVGL 9 rename:
+             * lv_btnmatrix_* → lv_buttonmatrix_*. `recolor` removed in v8+
+             * (text renders literal '#rrggbb ' tokens now → theme handles it). */
+            case LV_HASP_BTNMATRIX:
+            case HASP_OBJ_BTNMATRIX: {
+                obj = lv_buttonmatrix_create(parent_obj);
+                if (obj) {
+                    cb    = btnmatrix_event_handler;
+                    objid = LV_HASP_BTNMATRIX;
+                }
+                break;
+            }
+
+            /* TEXTAREA — S3 hasp_object.cpp:361. */
+            case LV_HASP_TEXTAREA:
+            case HASP_OBJ_TEXTAREA: {
+                obj = lv_textarea_create(parent_obj);
+                if (obj) {
+                    lv_textarea_set_cursor_click_pos(obj, true);
+                    cb    = textarea_event_handler;
+                    objid = LV_HASP_TEXTAREA;
+                }
+                break;
+            }
+
             default:
-                ESP_LOGW(TAG, "unsupported obj sdbm=%u (3a supports btn/label/switch/slider/checkbox/bar)", sdbm);
+                ESP_LOGW(TAG, "unsupported obj sdbm=%u (3h-4 supports 15 widgets — see hasp_object.cpp)", sdbm);
                 return;
         }
 

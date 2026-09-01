@@ -198,8 +198,20 @@ static hasp_attribute_type_t attribute_common_val(lv_obj_t* obj, int32_t& val, b
             if (update) lv_bar_set_value(obj, val, LV_ANIM_ON);
             else        val = lv_bar_get_value(obj);
             break;
-        /* ARC / DROPDOWN / ROLLER / GAUGE / SPINBOX / TABVIEW — TODO_3g: wire when
-         * those widgets land in hasp_object create switch. */
+        /* 3h-4: arc/dropdown/roller. Remaining (gauge/spinbox/tabview) come with
+         * their respective widget batches. */
+        case LV_HASP_ARC:
+            if (update) lv_arc_set_value(obj, val);
+            else        val = lv_arc_get_value(obj);
+            break;
+        case LV_HASP_DROPDOWN:
+            if (update) lv_dropdown_set_selected(obj, (uint32_t)val);
+            else        val = (int32_t)lv_dropdown_get_selected(obj);
+            break;
+        case LV_HASP_ROLLER:
+            if (update) lv_roller_set_selected(obj, (uint32_t)val, LV_ANIM_ON);
+            else        val = (int32_t)lv_roller_get_selected(obj);
+            break;
         default:
             return HASP_ATTR_TYPE_NOT_FOUND;
     }
@@ -213,6 +225,7 @@ static bool obj_get_range_mvp(lv_obj_t* obj, int32_t& min, int32_t& max)
     switch (obj_get_type(obj)) {
         case LV_HASP_SLIDER: min = lv_slider_get_min_value(obj); max = lv_slider_get_max_value(obj); return true;
         case LV_HASP_BAR:    min = lv_bar_get_min_value(obj);    max = lv_bar_get_max_value(obj);    return true;
+        case LV_HASP_ARC:    min = lv_arc_get_min_value(obj);    max = lv_arc_get_max_value(obj);    return true;
         default: return false;
     }
 }
@@ -232,6 +245,11 @@ static hasp_attribute_type_t attribute_common_range(lv_obj_t* obj, int32_t& val,
         case LV_HASP_BAR:
             if (update && (set_min ? val : min) == (set_max ? val : max)) return HASP_ATTR_TYPE_RANGE_ERROR;
             if (update) lv_bar_set_range(obj, set_min ? val : min, set_max ? val : max);
+            else        val = set_min ? min : max;
+            break;
+        case LV_HASP_ARC:
+            if (update && (set_min ? val : min) == (set_max ? val : max)) return HASP_ATTR_TYPE_RANGE_ERROR;
+            if (update) lv_arc_set_range(obj, set_min ? val : min, set_max ? val : max);
             else        val = set_min ? min : max;
             break;
         default:
@@ -266,6 +284,12 @@ static hasp_attribute_type_t attribute_common_text(lv_obj_t* obj, uint16_t attr_
                 lv_obj_t* lbl = find_button_label(obj);
                 if (!lbl) return HASP_ATTR_TYPE_NOT_FOUND;
                 if (update) lv_label_set_text(lbl, payload);
+                return HASP_ATTR_TYPE_STR;
+            }
+            break;
+        case LV_HASP_TEXTAREA:
+            if (attr_hash == ATTR_TEXT || attr_hash == ATTR_TXT) {
+                if (update) lv_textarea_set_text(obj, payload);
                 return HASP_ATTR_TYPE_STR;
             }
             break;
@@ -855,6 +879,81 @@ static hasp_attribute_type_t attribute_local_style(lv_obj_t* obj, const char* at
     }
 }
 
+/* ==================== 3h-4: widget-specific string/points attrs ==================== */
+
+/* ATTR_OPTIONS — dropdown/roller only. Payload is the newline-separated option
+ * list. Roller uses NORMAL mode (single-cycle). Passing a copy via set_options
+ * (not _static) so the caller's payload can be freed. */
+static hasp_attribute_type_t attribute_options(lv_obj_t* obj, const char* payload, bool update)
+{
+    if (!update) return HASP_ATTR_TYPE_STR; /* get path — MQTT wired later */
+    switch (obj_get_type(obj)) {
+        case LV_HASP_DROPDOWN: lv_dropdown_set_options(obj, payload); return HASP_ATTR_TYPE_STR;
+        case LV_HASP_ROLLER:   lv_roller_set_options(obj, payload, LV_ROLLER_MODE_NORMAL); return HASP_ATTR_TYPE_STR;
+        default: return HASP_ATTR_TYPE_NOT_FOUND;
+    }
+}
+
+/* ATTR_SRC — image only (MVP). Accepts a symbol pointer (e.g. LV_SYMBOL_OK)
+ * or a path string. LVGL 9 lv_image_set_src copies the pointer as-is; string
+ * payloads coming from JSON get copied by ArduinoJson, so re-strdup here to
+ * pin lifetime. Freed via `extra`. */
+static hasp_attribute_type_t attribute_src(lv_obj_t* obj, const char* payload, bool update)
+{
+    if (obj_get_type(obj) != LV_HASP_IMAGE) return HASP_ATTR_TYPE_NOT_FOUND;
+    if (!update) return HASP_ATTR_TYPE_STR;
+
+    hasp_obj_user_data_t* ud = hasp_obj_ud(obj);
+    if (!ud) return HASP_ATTR_TYPE_NOT_FOUND;
+
+    char* dup = strdup(payload);
+    if (!dup) return HASP_ATTR_TYPE_NOT_FOUND;
+
+    if (ud->extra) free(ud->extra);
+    ud->extra = dup;
+    lv_image_set_src(obj, dup);
+    return HASP_ATTR_TYPE_STR;
+}
+
+/* ATTR_POINTS — line only. Payload format "x1,y1;x2,y2;…" (S3 uses JSON-array
+ * via hasp_new_object nested path; MVP accepts the semicolon form). Allocates
+ * lv_point_precise_t[] and stashes in ud->extra so delete_event_handler frees. */
+static hasp_attribute_type_t attribute_points(lv_obj_t* obj, const char* payload, bool update)
+{
+    if (obj_get_type(obj) != LV_HASP_LINE) return HASP_ATTR_TYPE_NOT_FOUND;
+    if (!update) return HASP_ATTR_TYPE_STR;
+
+    hasp_obj_user_data_t* ud = hasp_obj_ud(obj);
+    if (!ud) return HASP_ATTR_TYPE_NOT_FOUND;
+
+    /* First pass: count pairs. */
+    uint32_t pairs = 1;
+    for (const char* p = payload; *p; p++) if (*p == ';') pairs++;
+
+    lv_point_precise_t* pts = (lv_point_precise_t*)calloc(pairs, sizeof(lv_point_precise_t));
+    if (!pts) return HASP_ATTR_TYPE_NOT_FOUND;
+
+    uint32_t i = 0;
+    const char* p = payload;
+    while (*p && i < pairs) {
+        char* end;
+        long x = strtol(p, &end, 10);
+        if (end == p || *end != ',') { free(pts); return HASP_ATTR_TYPE_NOT_FOUND; }
+        p = end + 1;
+        long y = strtol(p, &end, 10);
+        if (end == p) { free(pts); return HASP_ATTR_TYPE_NOT_FOUND; }
+        pts[i].x = (lv_value_precise_t)x;
+        pts[i].y = (lv_value_precise_t)y;
+        i++;
+        p = (*end == ';') ? end + 1 : end;
+    }
+
+    if (ud->extra) free(ud->extra);
+    ud->extra = pts;
+    lv_line_set_points(obj, pts, i);
+    return HASP_ATTR_TYPE_STR;
+}
+
 /* ==================== dispatcher — mirrors S3:2657 ==================== */
 
 void hasp_process_obj_attribute(lv_obj_t* obj, const char* attribute, const char* payload, bool update)
@@ -923,6 +1022,17 @@ void hasp_process_obj_attribute(lv_obj_t* obj, const char* attribute, const char
         case ATTR_TO_FRONT:
         case ATTR_TO_BACK:
             ret = attribute_common_method(obj, attr_hash);
+            break;
+
+        /* 3h-4: widget-specific string / points attributes. */
+        case ATTR_OPTIONS:
+            ret = attribute_options(obj, payload, update);
+            break;
+        case ATTR_SRC:
+            ret = attribute_src(obj, payload, update);
+            break;
+        case ATTR_POINTS:
+            ret = attribute_points(obj, payload, update);
             break;
 
         case ATTR_COMMENT:
