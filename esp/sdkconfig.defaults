@@ -81,6 +81,11 @@ CONFIG_LV_USE_SYSMON=y
 # CONFIG_LV_USE_PERF_MONITOR=y
 CONFIG_LV_USE_OBSERVER=y
 
+# 3h-4 batch 2: QRCODE extra is off by default in LVGL 9. Other batch 2
+# widgets (TABLE/TABVIEW/TILEVIEW/SPINBOX/CHART/LIST/CALENDAR/MSGBOX) are
+# already ON in Kconfig defaults.
+CONFIG_LV_USE_QRCODE=y
+
 # ============================================================
 # HTTP + WS
 # ============================================================

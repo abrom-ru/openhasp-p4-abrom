@@ -169,8 +169,9 @@ void slider_event_handler(lv_event_t* e)
 
     long val = 0;
     switch (obj_get_type(obj)) {
-        case LV_HASP_SLIDER: val = lv_slider_get_value(obj); break;
-        case LV_HASP_ARC:    val = lv_arc_get_value(obj);    break;   /* 3h-4 */
+        case LV_HASP_SLIDER:  val = lv_slider_get_value(obj);  break;
+        case LV_HASP_ARC:     val = lv_arc_get_value(obj);     break;   /* 3h-4 batch 1 */
+        case LV_HASP_SPINBOX: val = lv_spinbox_get_value(obj); break;   /* 3h-4 batch 2 */
         default: return;
     }
 
@@ -179,9 +180,8 @@ void slider_event_handler(lv_event_t* e)
 
 /* ==================== 3h-4 handlers ==================== */
 
-/* Mirrors src/hasp/hasp_event.cpp:610 selector_event_handler — dropdown/roller.
- * S3 also handles tabview/table here; those widgets land in a later 3h-4 batch,
- * so the switch defaults to `return` for unsupported selectors. */
+/* Mirrors src/hasp/hasp_event.cpp:610 selector_event_handler.
+ * 3h-4 batch 1: dropdown/roller. 3h-4 batch 2: +tabview/table. */
 void selector_event_handler(lv_event_t* e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -204,8 +204,25 @@ void selector_event_handler(lv_event_t* e)
             val = lv_roller_get_selected(obj);
             lv_roller_get_selected_str(obj, buffer, sizeof(buffer));
             break;
+        case LV_HASP_TABVIEW:
+            /* Mirrors S3 selector: publish the currently active tab index.
+             * LVGL 9 has no dedicated tab-name getter, so text stays empty. */
+            val = lv_tabview_get_tab_active(obj);
+            break;
+        case LV_HASP_TABLE: {
+            /* Mirrors S3 table selector: publish "row,col" via val
+             * (row << 16 | col) plus the cell text. */
+            uint32_t row = LV_TABLE_CELL_NONE;
+            uint32_t col = LV_TABLE_CELL_NONE;
+            lv_table_get_selected_cell(obj, &row, &col);
+            if (row == LV_TABLE_CELL_NONE || col == LV_TABLE_CELL_NONE) return;
+            val = (row << 16) | (col & 0xFFFF);
+            const char* txt = lv_table_get_cell_value(obj, row, col);
+            if (txt) { strncpy(buffer, txt, sizeof(buffer) - 1); buffer[sizeof(buffer) - 1] = 0; }
+            break;
+        }
         default:
-            return; /* tabview/table — pending later 3h-4 batch */
+            return;
     }
 
     /* Mirrors S3 event_object_selection_changed (S3 hasp_event.cpp:249) —
@@ -265,5 +282,82 @@ void textarea_event_handler(lv_event_t* e)
 
     char data[512];
     snprintf(data, sizeof(data), "{\"event\":\"%s\",\"text\":\"%s\"}", eventname, txt);
+    event_send_object_data(obj, data);
+}
+
+/* ==================== 3h-4 batch 2 handlers ==================== */
+
+/* Mirrors src/hasp/hasp_event.cpp msgbox_event_handler.
+ * LVGL 9 msgbox emits VALUE_CHANGED on the footer buttonmatrix child; the
+ * matrix passes it up to the msgbox itself. We report the pressed footer
+ * button index + text, plus DELETE for cleanup. */
+void msgbox_event_handler(lv_event_t* e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_DELETE) { delete_event_handler(e); return; }
+
+    /* LVGL 9 msgbox forwards click/change from footer buttons to msgbox. */
+    uint8_t hasp_event_id;
+    if (!translate_event(code, hasp_event_id)) return;
+
+    lv_obj_t* obj = static_cast<lv_obj_t*>(lv_event_get_target(e));
+
+    /* Best-effort: find the footer buttonmatrix child and read its active
+     * button. LVGL 9 does not expose the "clicked button" via msgbox getters. */
+    uint32_t    val = 0;
+    const char* txt = "";
+    lv_obj_t*   footer = lv_msgbox_get_footer(obj);
+    if (footer) {
+        uint32_t n = lv_obj_get_child_count(footer);
+        for (uint32_t i = 0; i < n; i++) {
+            lv_obj_t* child = lv_obj_get_child(footer, (int32_t)i);
+            if (child && lv_obj_has_state(child, LV_STATE_PRESSED)) {
+                val = i;
+                lv_obj_t* lbl = lv_obj_get_child(child, 0);
+                if (lbl) { const char* t = lv_label_get_text(lbl); if (t) txt = t; }
+                break;
+            }
+        }
+    }
+
+    char eventname[8];
+    Parser::get_event_name(hasp_event_id, eventname, sizeof(eventname));
+
+    char data[192];
+    snprintf(data, sizeof(data), "{\"event\":\"%s\",\"val\":%u,\"text\":\"%s\"}",
+             eventname, (unsigned)val, txt);
+    event_send_object_data(obj, data);
+}
+
+/* Mirrors src/hasp/hasp_event.cpp calendar_event_handler.
+ * LVGL 9 emits VALUE_CHANGED on the internal buttonmatrix which propagates to
+ * the calendar. Publish the pressed date as val=YYYYMMDD and text="YYYY-MM-DD". */
+void calendar_event_handler(lv_event_t* e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_DELETE) { delete_event_handler(e); return; }
+    if (code != LV_EVENT_VALUE_CHANGED) return;
+
+    /* VALUE_CHANGED bubbles from the internal buttonmatrix child; use
+     * current_target so we hand `lv_calendar_get_pressed_date` the calendar
+     * itself, not the btnm (casting btnm → lv_calendar_t* is UB and derefs a
+     * junk `calendar->btnm` pointer → load-fault in lv_buttonmatrix_get_button_text). */
+    lv_obj_t* obj = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+
+    lv_calendar_date_t date = {};
+    if (lv_calendar_get_pressed_date(obj, &date) != LV_RESULT_OK) return;
+    if (date.year == 0) return; /* extra guard: LVGL 9 can still return OK on non-day buttons */
+
+    uint32_t val = (uint32_t)date.year * 10000u + (uint32_t)date.month * 100u + date.day;
+    char text[16];
+    snprintf(text, sizeof(text), "%04u-%02u-%02u",
+             (unsigned)date.year, (unsigned)date.month, (unsigned)date.day);
+
+    char eventname[8];
+    Parser::get_event_name(HASP_EVENT_CHANGED, eventname, sizeof(eventname));
+
+    char data[192];
+    snprintf(data, sizeof(data), "{\"event\":\"%s\",\"val\":%u,\"text\":\"%s\"}",
+             eventname, (unsigned)val, text);
     event_send_object_data(obj, data);
 }

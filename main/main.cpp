@@ -320,12 +320,55 @@ static void app_ui_init()
             "{\"page\":3,\"id\":15,\"obj\":\"btnmatrix\","
             "\"x\":40,\"y\":380,\"w\":600,\"h\":120}");
 
-        // 3d demo: auto-toggle pages 1→2→3 via dispatch every 4s (proves the
+        // 3h-4 batch 2 smoke — 10 new widgets across pages 4+5.
+        // Page 4: TABVIEW with two TABs; TAB11 hosts SPINBOX+TABLE, TAB12 hosts QRCODE+CHART.
+        // (id=0 is reserved for the page screen itself in HASP registry — never use it for widgets.)
+        hasp_dispatch_jsonl(
+            "{\"page\":4,\"id\":10,\"obj\":\"tabview\","
+            "\"x\":0,\"y\":0,\"w\":1024,\"h\":600}");
+        hasp_dispatch_jsonl(
+            "{\"page\":4,\"id\":11,\"obj\":\"tab\",\"parentid\":10}");
+        hasp_dispatch_jsonl(
+            "{\"page\":4,\"id\":12,\"obj\":\"tab\",\"parentid\":10}");
+        hasp_dispatch_jsonl(
+            "{\"page\":4,\"id\":3,\"obj\":\"spinbox\",\"parentid\":11,"
+            "\"x\":20,\"y\":20,\"w\":180,\"h\":60,\"val\":42}");
+        hasp_dispatch_jsonl(
+            "{\"page\":4,\"id\":4,\"obj\":\"table\",\"parentid\":11,"
+            "\"x\":240,\"y\":20,\"w\":400,\"h\":300}");
+        hasp_dispatch_jsonl(
+            "{\"page\":4,\"id\":5,\"obj\":\"qrcode\",\"parentid\":12,"
+            "\"x\":20,\"y\":20,\"w\":160,\"h\":160}");
+        hasp_dispatch_jsonl(
+            "{\"page\":4,\"id\":6,\"obj\":\"chart\",\"parentid\":12,"
+            "\"x\":220,\"y\":20,\"w\":600,\"h\":300}");
+
+        // Page 5: standalone CALENDAR + MSGBOX + TILEVIEW + LIST + generic OBJ.
+        hasp_dispatch_jsonl(
+            "{\"page\":5,\"id\":1,\"obj\":\"label\","
+            "\"x\":40,\"y\":10,\"w\":900,\"h\":30,\"text\":\"HASP 3h-4 batch 2 - page 5\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":5,\"id\":10,\"obj\":\"calendar\","
+            "\"x\":20,\"y\":50,\"w\":320,\"h\":320}");
+        hasp_dispatch_jsonl(
+            "{\"page\":5,\"id\":20,\"obj\":\"msgbox\","
+            "\"x\":360,\"y\":50,\"w\":320,\"h\":200,\"text\":\"Hello P4\"}");
+        hasp_dispatch_jsonl(
+            "{\"page\":5,\"id\":30,\"obj\":\"tileview\","
+            "\"x\":700,\"y\":50,\"w\":300,\"h\":200}");
+        hasp_dispatch_jsonl(
+            "{\"page\":5,\"id\":40,\"obj\":\"list\","
+            "\"x\":360,\"y\":270,\"w\":320,\"h\":300}");
+        hasp_dispatch_jsonl(
+            "{\"page\":5,\"id\":50,\"obj\":\"obj\","
+            "\"x\":700,\"y\":270,\"w\":300,\"h\":300,\"bg_color\":\"#2040a0\"}");
+
+        // 3d demo: auto-toggle pages 1..5 via dispatch every 4s (proves the
         // "page N" text command reaches haspPages.set()). Real invocation
         // path in 3f/4 will be MQTT/console -> hasp_dispatch_command.
         lv_timer_t* t = lv_timer_create([](lv_timer_t* /*t*/) {
             uint8_t cur = hasp_get_page();
-            uint8_t nxt = (cur >= 3) ? 1 : (cur + 1);
+            uint8_t nxt = (cur >= 5) ? 1 : (cur + 1);
             char cmd[16];
             snprintf(cmd, sizeof(cmd), "page %u", nxt);
             hasp_dispatch_command(cmd);

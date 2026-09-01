@@ -213,6 +213,15 @@ static hasp_attribute_type_t attribute_common_val(lv_obj_t* obj, int32_t& val, b
             if (update) lv_roller_set_selected(obj, (uint32_t)val, LV_ANIM_ON);
             else        val = (int32_t)lv_roller_get_selected(obj);
             break;
+        /* 3h-4 batch 2: spinbox + tabview. */
+        case LV_HASP_SPINBOX:
+            if (update) lv_spinbox_set_value(obj, val);
+            else        val = lv_spinbox_get_value(obj);
+            break;
+        case LV_HASP_TABVIEW:
+            if (update) lv_tabview_set_active(obj, (uint32_t)val, LV_ANIM_ON);
+            else        val = (int32_t)lv_tabview_get_tab_active(obj);
+            break;
         default:
             return HASP_ATTR_TYPE_NOT_FOUND;
     }
@@ -224,9 +233,10 @@ static hasp_attribute_type_t attribute_common_val(lv_obj_t* obj, int32_t& val, b
 static bool obj_get_range_mvp(lv_obj_t* obj, int32_t& min, int32_t& max)
 {
     switch (obj_get_type(obj)) {
-        case LV_HASP_SLIDER: min = lv_slider_get_min_value(obj); max = lv_slider_get_max_value(obj); return true;
-        case LV_HASP_BAR:    min = lv_bar_get_min_value(obj);    max = lv_bar_get_max_value(obj);    return true;
-        case LV_HASP_ARC:    min = lv_arc_get_min_value(obj);    max = lv_arc_get_max_value(obj);    return true;
+        case LV_HASP_SLIDER:  min = lv_slider_get_min_value(obj);  max = lv_slider_get_max_value(obj);  return true;
+        case LV_HASP_BAR:     min = lv_bar_get_min_value(obj);     max = lv_bar_get_max_value(obj);     return true;
+        case LV_HASP_ARC:     min = lv_arc_get_min_value(obj);     max = lv_arc_get_max_value(obj);     return true;
+        case LV_HASP_SPINBOX: min = lv_spinbox_get_min_value(obj); max = lv_spinbox_get_max_value(obj); return true;
         default: return false;
     }
 }
@@ -251,6 +261,11 @@ static hasp_attribute_type_t attribute_common_range(lv_obj_t* obj, int32_t& val,
         case LV_HASP_ARC:
             if (update && (set_min ? val : min) == (set_max ? val : max)) return HASP_ATTR_TYPE_RANGE_ERROR;
             if (update) lv_arc_set_range(obj, set_min ? val : min, set_max ? val : max);
+            else        val = set_min ? min : max;
+            break;
+        case LV_HASP_SPINBOX:
+            if (update && (set_min ? val : min) == (set_max ? val : max)) return HASP_ATTR_TYPE_RANGE_ERROR;
+            if (update) lv_spinbox_set_range(obj, set_min ? val : min, set_max ? val : max);
             else        val = set_min ? min : max;
             break;
         default:
@@ -291,6 +306,20 @@ static hasp_attribute_type_t attribute_common_text(lv_obj_t* obj, uint16_t attr_
         case LV_HASP_TEXTAREA:
             if (attr_hash == ATTR_TEXT || attr_hash == ATTR_TXT) {
                 if (update) lv_textarea_set_text(obj, payload);
+                return HASP_ATTR_TYPE_STR;
+            }
+            break;
+        /* 3h-4 batch 2: MSGBOX. LVGL 9 has no direct set_text; each call to
+         * add_text creates a new label. To emulate S3 set-once semantics we
+         * reuse the first label under content, or create it lazily. */
+        case LV_HASP_MSGBOX:
+            if (attr_hash == ATTR_TEXT || attr_hash == ATTR_TXT) {
+                if (update) {
+                    lv_obj_t* content = lv_msgbox_get_content(obj);
+                    lv_obj_t* first   = content ? lv_obj_get_child(content, 0) : nullptr;
+                    if (first) lv_label_set_text(first, payload);
+                    else       lv_msgbox_add_text(obj, payload);
+                }
                 return HASP_ATTR_TYPE_STR;
             }
             break;
@@ -523,6 +552,17 @@ static lv_part_t hasp_part_to_lv_part(lv_obj_t* obj, uint8_t part_num)
                 default:                     return LV_PART_MAIN;
             }
         case LV_HASP_BTNMATRIX:
+            return (part_num == LV_HASP_PART_ITEMS) ? LV_PART_ITEMS : LV_PART_MAIN;
+        /* 3h-4 batch 2. LVGL 9 dropped LV_PART_TICKS (was LVGL 7-only for chart);
+         * scale/tick styling is done via LV_PART_MAIN in v9. */
+        case LV_HASP_CHART:
+            switch (part_num) {
+                case LV_HASP_PART_ITEMS:  return LV_PART_ITEMS;
+                case LV_HASP_PART_CURSOR: return LV_PART_CURSOR;
+                default:                  return LV_PART_MAIN;
+            }
+        case LV_HASP_TABLE:
+        case LV_HASP_TABVIEW:
             return (part_num == LV_HASP_PART_ITEMS) ? LV_PART_ITEMS : LV_PART_MAIN;
         default:
             return LV_PART_MAIN;

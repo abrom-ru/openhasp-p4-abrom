@@ -177,6 +177,20 @@ void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id)
     }
     saved_page_id = pageid;
 
+    /* 3h-4 batch 2: parentid support — mirrors S3 hasp_object.cpp:251
+     * (parentid resolution before create). Enables nested objects
+     * (TAB inside TABVIEW, buttons inside CONTAINER/OBJECT, etc). */
+    if (!config[FP_PARENTID].isNull()) {
+        uint8_t parentid = config[FP_PARENTID].as<uint8_t>();
+        if (parentid != 0) {
+            lv_obj_t* np = hasp_find_obj_from_parent_id(parent_obj, parentid);
+            if (np) parent_obj = np;
+            else    ESP_LOGW(TAG, "parentid %u not found on page %u", parentid, pageid);
+        }
+        /* FP_PARENTID removed at end of hasp_new_object with the rest of
+         * framework keys — leave here so attribute processor can ignore it. */
+    }
+
     /* Consume id early (S3 line 263-264). */
     uint8_t id = config[FP_ID].as<uint8_t>();
     config.remove(FP_ID);
@@ -390,8 +404,177 @@ void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id)
                 break;
             }
 
+            /* ==================== 3h-4 batch 2 ==================== */
+
+            /* Generic container — S3 line 289 (ALARM), 400 (CONTAINER), 409 (OBJECT).
+             * All three sdbm aliases collapse to bare lv_obj_create in LVGL 9. */
+            case LV_HASP_OBJECT:
+            case LV_HASP_CONTAINER:
+            case LV_HASP_ALARM:
+            case HASP_OBJ_OBJ:
+            case HASP_OBJ_CONT:
+            case HASP_OBJ_ALARM: {
+                obj = lv_obj_create(parent_obj);
+                if (obj) {
+                    cb    = generic_event_handler;
+                    /* Preserve the caller's intent so obj_get_type sees the
+                     * exact alias they used (LV_HASP_OBJECT vs CONTAINER vs ALARM).
+                     * Match both the small enum values (LV_HASP_*) and the
+                     * sdbm hashes (HASP_OBJ_*) — jsonl "obj":"alarm" produces
+                     * the hash, whereas obsolete "objid":60 produces the enum. */
+                    switch (sdbm) {
+                        case LV_HASP_ALARM:
+                        case HASP_OBJ_ALARM:     objid = LV_HASP_ALARM;     break;
+                        case LV_HASP_CONTAINER:
+                        case HASP_OBJ_CONT:      objid = LV_HASP_CONTAINER; break;
+                        default:                 objid = LV_HASP_OBJECT;    break;
+                    }
+                }
+                break;
+            }
+
+            /* TABLE — S3 hasp_object.cpp:313. */
+            case LV_HASP_TABLE:
+            case HASP_OBJ_TABLE: {
+                obj = lv_table_create(parent_obj);
+                if (obj) {
+                    cb    = selector_event_handler;
+                    objid = LV_HASP_TABLE;
+                }
+                break;
+            }
+
+            /* QRCODE — S3 hasp_object.cpp:381. LVGL 9 signature dropped the
+             * initial size+colors — call setters afterwards. Requires
+             * CONFIG_LV_USE_QRCODE=y (set in esp/sdkconfig.defaults). */
+            case LV_HASP_QRCODE:
+            case HASP_OBJ_QRCODE: {
+                obj = lv_qrcode_create(parent_obj);
+                if (obj) {
+                    lv_qrcode_set_size(obj, 140);
+                    lv_qrcode_set_dark_color(obj, lv_color_black());
+                    lv_qrcode_set_light_color(obj, lv_color_white());
+                    cb    = generic_event_handler;
+                    objid = LV_HASP_QRCODE;
+                }
+                break;
+            }
+
+            /* SPINBOX — S3 hasp_object.cpp:585. Uses slider_event_handler
+             * (extended above with LV_HASP_SPINBOX branch). */
+            case LV_HASP_SPINBOX:
+            case HASP_OBJ_SPINBOX: {
+                obj = lv_spinbox_create(parent_obj);
+                if (obj) {
+                    lv_spinbox_set_range(obj, 0, 100);
+                    cb    = slider_event_handler;
+                    objid = LV_HASP_SPINBOX;
+                }
+                break;
+            }
+
+            /* MSGBOX — S3 hasp_object.cpp:664. LVGL 9 API is very different:
+             * create(NULL) makes a modal msgbox on the active screen root,
+             * create(parent) makes an in-place one. Title/text/buttons are
+             * attached via add_title/add_text/add_footer_button.
+             * We create in-place (parent_obj) — modal covers the whole screen
+             * which is rarely what an HASP jsonl wants. */
+            case LV_HASP_MSGBOX:
+            case HASP_OBJ_MSGBOX: {
+                obj = lv_msgbox_create(parent_obj);
+                if (obj) {
+                    cb    = msgbox_event_handler;
+                    objid = LV_HASP_MSGBOX;
+                }
+                break;
+            }
+
+            /* TABVIEW — S3 hasp_object.cpp:454. LVGL 9 signature is
+             * lv_tabview_create(parent), then set_tab_bar_position/size. */
+            case LV_HASP_TABVIEW:
+            case HASP_OBJ_TABVIEW: {
+                obj = lv_tabview_create(parent_obj);
+                if (obj) {
+                    lv_tabview_set_tab_bar_position(obj, LV_DIR_TOP);
+                    lv_tabview_set_tab_bar_size(obj, 50);
+                    cb    = selector_event_handler;
+                    objid = LV_HASP_TABVIEW;
+                }
+                break;
+            }
+
+            /* TAB — S3 hasp_object.cpp:494. Must have a TABVIEW parent. */
+            case LV_HASP_TAB:
+            case HASP_OBJ_TAB: {
+                if (parent_obj && obj_check_type(parent_obj, LV_HASP_TABVIEW)) {
+                    obj = lv_tabview_add_tab(parent_obj, "Tab");
+                    if (obj) {
+                        cb    = generic_event_handler;
+                        objid = LV_HASP_TAB;
+                    }
+                } else {
+                    ESP_LOGW(TAG, "parent of TAB must be a TABVIEW");
+                    return;
+                }
+                break;
+            }
+
+            /* TILEVIEW — S3 hasp_object.cpp:475. No dedicated handler. */
+            case LV_HASP_TILEVIEW:
+            case HASP_OBJ_TILEVIEW: {
+                obj = lv_tileview_create(parent_obj);
+                if (obj) {
+                    cb    = generic_event_handler;
+                    objid = LV_HASP_TILEVIEW;
+                }
+                break;
+            }
+
+            /* LIST — S3 hasp_object.cpp:596. Extra widget; event callbacks land
+             * on individual list buttons, not on the container. */
+            case LV_HASP_LIST:
+            case HASP_OBJ_LIST: {
+                obj = lv_list_create(parent_obj);
+                if (obj) {
+                    cb    = generic_event_handler;
+                    objid = LV_HASP_LIST;
+                }
+                break;
+            }
+
+            /* CALENDAR — S3 hasp_object.cpp:682. Two enum aliases: the S3
+             * legacy misspelling LV_HASP_CALENDER (with an 'e') and the sdbm
+             * HASP_OBJ_CALENDAR (correct spelling). Keep both. */
+            case LV_HASP_CALENDER:
+            case HASP_OBJ_CALENDAR: {
+                obj = lv_calendar_create(parent_obj);
+                if (obj) {
+                    cb    = calendar_event_handler;
+                    objid = LV_HASP_CALENDER;
+                }
+                break;
+            }
+
+            /* CHART — S3 hasp_object.cpp:606. LVGL 9 rename:
+             * lv_chart_set_range → lv_chart_set_axis_range (per-axis),
+             * lv_chart_set_next  → lv_chart_set_next_value,
+             * lv_chart_add_series takes an axis argument. We create with a
+             * single primary-Y series so an empty jsonl entry still shows
+             * something; more series can be added later via attributes. */
+            case LV_HASP_CHART:
+            case HASP_OBJ_CHART: {
+                obj = lv_chart_create(parent_obj);
+                if (obj) {
+                    lv_chart_set_axis_range(obj, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
+                    lv_chart_add_series(obj, lv_color_hex(0x00b7ff), LV_CHART_AXIS_PRIMARY_Y);
+                    cb    = generic_event_handler;
+                    objid = LV_HASP_CHART;
+                }
+                break;
+            }
+
             default:
-                ESP_LOGW(TAG, "unsupported obj sdbm=%u (3h-4 supports 15 widgets — see hasp_object.cpp)", sdbm);
+                ESP_LOGW(TAG, "unsupported obj sdbm=%u (3h-4 batch 2 covers 25+ widgets — see hasp_object.cpp)", sdbm);
                 return;
         }
 

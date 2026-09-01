@@ -30,9 +30,11 @@ enum hasp_event_t {
 void delete_event_handler(lv_event_t* e);
 void generic_event_handler(lv_event_t* e);
 void toggle_event_handler(lv_event_t* e);
-void slider_event_handler(lv_event_t* e);         /* also arc (3h-4) */
-void selector_event_handler(lv_event_t* e);       /* 3h-4: dropdown / roller */
-void btnmatrix_event_handler(lv_event_t* e);      /* 3h-4: buttonmatrix */
-void textarea_event_handler(lv_event_t* e);       /* 3h-4: textarea */
+void slider_event_handler(lv_event_t* e);         /* slider / arc / spinbox */
+void selector_event_handler(lv_event_t* e);       /* dropdown / roller / tabview / table */
+void btnmatrix_event_handler(lv_event_t* e);      /* buttonmatrix */
+void textarea_event_handler(lv_event_t* e);       /* textarea */
+void msgbox_event_handler(lv_event_t* e);         /* 3h-4 batch 2: msgbox */
+void calendar_event_handler(lv_event_t* e);       /* 3h-4 batch 2: calendar */
 
 #endif
