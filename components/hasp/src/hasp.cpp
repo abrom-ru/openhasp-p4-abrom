@@ -16,6 +16,9 @@
 #include <ArduinoJson.h>
 #include "esp_log.h"
 
+#include <stdio.h>
+#include <string.h>
+
 static const char* TAG = "hasp";
 
 extern "C" esp_err_t hasp_init(void)
@@ -31,6 +34,68 @@ extern "C" esp_err_t hasp_init(void)
     hasp_set_theme(haspThemeId);
     /* 3b: allocate the N page screens and load page 1. Caller holds LVGL lock. */
     haspPages.init(PAGE_START_INDEX);
+
+    /* Step 5: autoload pages.jsonl from LittleFS, same slot as S3 haspSetup
+     * (hasp.cpp:613) — hasp_load_json() runs after pages exist so the parser
+     * can attach objects to real screens. */
+    hasp_load_pages_jsonl(nullptr);
+    return ESP_OK;
+}
+
+extern "C" esp_err_t hasp_load_pages_jsonl(const char* path)
+{
+    const char* p = (path && path[0]) ? path : HASP_PAGES_JSONL;
+
+    FILE* f = fopen(p, "r");
+    if (!f) {
+        /* S3 Page::load_jsonl:218 — warn + return, no fatal. Fresh boards
+         * without pages.jsonl come up blank and receive layout via MQTT. */
+        ESP_LOGW(TAG, "pages jsonl not found: %s", p);
+        return ESP_OK;
+    }
+
+    /* Line buffer: HASP objects are typically <256B, but style-heavy lines can
+     * approach 1KB. S3 uses a Stream reader with a 1024 chunk; we match that. */
+    char   line[1024];
+    size_t nlines = 0;
+    size_t nobjs  = 0;
+
+    while (fgets(line, sizeof(line), f) != nullptr) {
+        nlines++;
+
+        /* Strip trailing \r\n so ArduinoJson doesn't waste a byte on it. */
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[--len] = '\0';
+        }
+
+        /* Skip whitespace-only, empty, and comment lines. Same three prefixes
+         * as hasp_dispatch_command (# and //). */
+        const char* s = line;
+        while (*s == ' ' || *s == '\t') s++;
+        if (*s == '\0')                      continue;
+        if (*s == '#')                       continue;
+        if (*s == '/' && *(s + 1) == '/')    continue;
+
+        /* Only `{...}` object lines are valid jsonl. Anything else is a
+         * malformed file — warn and skip that line, don't abort the load. */
+        if (*s != '{') {
+            ESP_LOGW(TAG, "pages jsonl:%u — expected '{', got '%c'", (unsigned)nlines, *s);
+            continue;
+        }
+
+        if (hasp_dispatch_jsonl(s) == ESP_OK) nobjs++;
+    }
+
+    if (ferror(f)) {
+        ESP_LOGE(TAG, "pages jsonl: read error on %s", p);
+        fclose(f);
+        return ESP_FAIL;
+    }
+    fclose(f);
+
+    ESP_LOGI(TAG, "pages jsonl: loaded %u objects from %s (%u lines)",
+             (unsigned)nobjs, p, (unsigned)nlines);
     return ESP_OK;
 }
 

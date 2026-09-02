@@ -363,12 +363,14 @@ static void app_ui_init()
             "{\"page\":5,\"id\":50,\"obj\":\"obj\","
             "\"x\":700,\"y\":270,\"w\":300,\"h\":300,\"bg_color\":\"#2040a0\"}");
 
-        // 3d demo: auto-toggle pages 1..5 via dispatch every 4s (proves the
-        // "page N" text command reaches haspPages.set()). Real invocation
-        // path in 3f/4 will be MQTT/console -> hasp_dispatch_command.
+        // 3d demo: auto-toggle pages 1..6 via dispatch every 4s (proves the
+        // "page N" text command reaches haspPages.set()). Page 6 comes from
+        // step-5 pages.jsonl autoload — cycling through it confirms objects
+        // baked into LittleFS render. Real invocation path in 3f/4 will be
+        // MQTT/console -> hasp_dispatch_command.
         lv_timer_t* t = lv_timer_create([](lv_timer_t* /*t*/) {
             uint8_t cur = hasp_get_page();
-            uint8_t nxt = (cur >= 5) ? 1 : (cur + 1);
+            uint8_t nxt = (cur >= 6) ? 1 : (cur + 1);
             char cmd[16];
             snprintf(cmd, sizeof(cmd), "page %u", nxt);
             hasp_dispatch_command(cmd);
