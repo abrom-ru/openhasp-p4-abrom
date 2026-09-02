@@ -91,7 +91,7 @@ esp_err_t HaspMqtt::get_config(JsonObject obj) const
     mqtt["host"]       = host;
     mqtt["port"]       = port;
     mqtt["user"]       = user;
-    mqtt["password"]   = "******";
+    mqtt["password"]   = "********"; // D_PASSWORD_MASK (S3 lang.h)
     mqtt["client_id"]  = client_id;
     mqtt["group"]      = group;
     // Step 7B: teleperiod_ is populated at load_from_nvs (or the 300 s
@@ -120,7 +120,7 @@ esp_err_t HaspMqtt::set_config(JsonObjectConst obj)
     }
     if (mqtt["password"].is<const char*>()) {
         std::string pw = mqtt["password"].as<std::string>();
-        if (pw != "******") {
+        if (pw != "********") {
             password_ = pw;
             nvs_set_string("password", password_);
         }

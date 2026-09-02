@@ -19,9 +19,9 @@ class ServiceManager;
 esp_err_t hasp_config_load(ServiceManager& mgr, const char* path = nullptr);
 
 // Serialize mgr.get_config() to /littlefs/config.json. Passwords are
-// masked ("******") by each service's get_config, matching S3
-// configWrite → configOutput semantics — the on-flash file is safe to
-// leak and cannot be used to re-derive secrets. Real secrets stay in
-// NVS; on reboot set_config skips "******" and load_from_nvs restores
+// masked ("********" — S3 D_PASSWORD_MASK) by each service's get_config,
+// matching S3 configWrite → configOutput semantics — the on-flash file
+// is safe to leak and cannot be used to re-derive secrets. Real secrets
+// stay in NVS; on reboot set_config skips "********" and load_from_nvs restores
 // them.
 esp_err_t hasp_config_save(ServiceManager& mgr, const char* path = nullptr);

@@ -47,7 +47,7 @@ esp_err_t HaspWifi::get_config(JsonObject obj) const
         nvs_get_string("hostname", hostname);
 
     wifi["ssid"] = ssid;
-    wifi["password"] = "******"; // always masked
+    wifi["password"] = "********"; // D_PASSWORD_MASK (S3 lang.h)
     wifi["hostname"] = hostname;
 
     return ESP_OK;
@@ -68,7 +68,7 @@ esp_err_t HaspWifi::set_config(JsonObjectConst obj)
     if (wifi["password"].is<const char *>())
     {
         std::string pw = wifi["password"].as<std::string>();
-        if (pw != "******")
+        if (pw != "********")
         { // only set when it really changed
             password_ = pw;
             nvs_set_string("password", password_);

@@ -92,3 +92,6 @@ CONFIG_LV_USE_QRCODE=y
 
 CONFIG_HTTPD_WS_SUPPORT=y
 CONFIG_HTTPD_WS_PRE_HANDSHAKE_CB_SUPPORT=y
+# 7C-refactor: SSR route count (12) exceeds the default httpd cap (8).
+# IDF v6.1 removed CONFIG_HTTPD_MAX_URI_HANDLERS — bump is done at runtime
+# via config.max_uri_handlers in components/hasp_http/src/hasp_http.cpp.
