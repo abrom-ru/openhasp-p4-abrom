@@ -28,6 +28,12 @@ static constexpr const char* MQTT_TOPIC_LWT   = "LWT";
 static constexpr const char* MQTT_TOPIC_CMD   = "command";
 static constexpr const char* MQTT_LWT_ONLINE  = "online";
 static constexpr const char* MQTT_LWT_OFFLINE = "offline";
+// Step 4d: S3 hasp_conf.h defines MQTT_GROUPNAME "plates" and
+// MQTT_TOPIC_BROADCAST "broadcast". Group name is a config option (NVS in a
+// later step); broadcast is a fixed hasp/broadcast/command topic shared by
+// every plate on the broker.
+static constexpr const char* MQTT_GROUPNAME       = "plates";
+static constexpr const char* MQTT_TOPIC_BROADCAST = "broadcast";
 
 // Step 4c: downlink command queue capacity. S3 uses 64 (mqttSetup:
 // xQueueCreate(64, sizeof(mqtt_message_t))). Same value here so behaviour
@@ -38,8 +44,9 @@ static constexpr UBaseType_t CMD_QUEUE_LEN = 64;
 // topic and payload are heap-alloc'd C strings (owned by the message);
 // drainer frees both after dispatch.
 struct mqtt_cmd_msg_t {
-    char* topic;     // subtopic AFTER "hasp/<host>/command" prefix, "" if bare
-    char* payload;   // NUL-terminated payload
+    char* topic;         // subtopic AFTER "hasp/<host>/command" prefix, "" if bare
+    char* payload;       // NUL-terminated payload
+    const char* source;  // static string: "node" | "group" | "bcast" (log-only, step 4d)
 };
 
 HaspMqtt::~HaspMqtt()
@@ -177,10 +184,16 @@ esp_err_t HaspMqtt::start_backend()
     // "<prefix>/#" (matches parent + all subs per MQTT spec 4.7).
     // Strip in MQTT_EVENT_DATA leaves "" (bare command) or "/subtopic".
     command_prefix_ = std::string(MQTT_PREFIX) + "/" + hostname + "/" + MQTT_TOPIC_CMD;
+    // Step 4d: parallel prefixes for group + broadcast command topics.
+    // Same layout as command_prefix_ (no trailing slash); subscribe with "/#"
+    // and MQTT_EVENT_DATA strips the prefix the same way for all three.
+    group_prefix_     = std::string(MQTT_PREFIX) + "/" + MQTT_GROUPNAME + "/" + MQTT_TOPIC_CMD;
+    broadcast_prefix_ = std::string(MQTT_PREFIX) + "/" + MQTT_TOPIC_BROADCAST + "/" + MQTT_TOPIC_CMD;
 
-    ESP_LOGI(TAG, "client_id=%s  lwt=%s  state=%s*  cmd=%s[/#]",
+    ESP_LOGI(TAG, "client_id=%s  lwt=%s  state=%s*  cmd=%s[/#]  grp=%s[/#]  bcast=%s[/#]",
              full_client_id_.c_str(), lwt_topic_.c_str(),
-             state_prefix_.c_str(), command_prefix_.c_str());
+             state_prefix_.c_str(), command_prefix_.c_str(),
+             group_prefix_.c_str(), broadcast_prefix_.c_str());
 
     // Step 4c: create the downlink queue on first start; keep it alive across
     // reconnects (S3 mqttSetup creates it once at boot). Draining is idempotent
@@ -378,28 +391,24 @@ void HaspMqtt::mqtt_event_handler(void* arg, esp_event_base_t, int32_t id, void*
         self->on_mqtt_disconnected();
         break;
     case MQTT_EVENT_DATA: {
-        // Step 4c: match against command_prefix_, strip it, enqueue.
-        // esp-mqtt does NOT NUL-terminate event->topic / event->data —
-        // we must respect the lengths explicitly. Fragmentation (payload
-        // > buffer.size = 2048) not handled here; matches S3 which also
-        // treats each MQTT_EVENT_DATA as a full message.
-        const std::string& cp = self->command_prefix_;
-        int tlen = event->topic_len;
-        int clen = (int)cp.size();
-        if (tlen >= clen && cp.size() > 0 &&
-            memcmp(event->topic, cp.data(), clen) == 0 &&
-            (tlen == clen || event->topic[clen] == '/'))
-        {
-            const char* subtopic  = event->topic + clen;
-            int         sub_len   = tlen - clen;
-            // Skip leading '/' so "" == bare command, "page" / "p1b2.text"
-            // for subs (S3 hasp_mqtt_esp.cpp:289 does the same).
-            if (sub_len > 0 && *subtopic == '/') { subtopic++; sub_len--; }
-            char sub_buf[96];
-            if (sub_len >= (int)sizeof(sub_buf)) sub_len = sizeof(sub_buf) - 1;
-            memcpy(sub_buf, subtopic, sub_len);
-            sub_buf[sub_len] = '\0';
-            self->enqueue_command(sub_buf, event->data, event->data_len);
+        // Step 4c/4d: try node → group → broadcast prefix in that order
+        // (S3 hasp_mqtt_pubsubclient.cpp:141-166 mqttCallback). Order matters
+        // for logs only — MQTT broker guarantees per-topic dispatch, but a
+        // subscription to hasp/plates/command/# on a device whose hostname is
+        // literally "plates" would match both node and group; node wins,
+        // which matches S3 behavior.
+        if (self->match_and_enqueue(self->command_prefix_,   "node",
+                                    event->topic, event->topic_len,
+                                    event->data, event->data_len)) {
+            // matched node
+        } else if (self->match_and_enqueue(self->group_prefix_, "group",
+                                          event->topic, event->topic_len,
+                                          event->data, event->data_len)) {
+            // matched group
+        } else if (self->match_and_enqueue(self->broadcast_prefix_, "bcast",
+                                          event->topic, event->topic_len,
+                                          event->data, event->data_len)) {
+            // matched broadcast
         } else {
             ESP_LOGW(TAG, "MQTT unmatched topic %.*s",
                      event->topic_len, event->topic);
@@ -425,21 +434,27 @@ void HaspMqtt::on_mqtt_connected()
         publish(lwt_topic_.c_str(), MQTT_LWT_ONLINE, 1, true);
     }
 
-    // Step 4c: subscribe to node command topic. Wildcard "#" matches parent
-    // too, so a single subscribe covers both "hasp/<host>/command" (bare)
-    // and "hasp/<host>/command/anything" (S3 mqttSubscribeTo pattern in
-    // onMqttConnect / hasp_mqtt_esp.cpp:359). Broker keeps subscription
-    // across reconnects because we set disable_clean_session=true, but the
-    // esp-mqtt client resends SUBSCRIBE on each CONNECT anyway — resub here
-    // is safe (broker returns SUBACK either way).
-    if (!command_prefix_.empty() && client_) {
-        std::string wildcard = command_prefix_ + "/#";
-        int msg_id = esp_mqtt_client_subscribe(client_, wildcard.c_str(), 0);
-        if (msg_id < 0) {
-            ESP_LOGE(TAG, "subscribe failed: %s", wildcard.c_str());
-        } else {
-            ESP_LOGI(TAG, "subscribed: %s (msg_id=%d)", wildcard.c_str(), msg_id);
-        }
+    // Step 4c/4d: subscribe to node + group + broadcast command topics.
+    // Wildcard "#" matches parent too, so a single subscribe covers both bare
+    // and sub-topics per MQTT spec 4.7 (S3 mqttSubscribeTo pattern in
+    // onMqttConnect / hasp_mqtt_pubsubclient.cpp:302-323). Broker keeps
+    // subscriptions across reconnects because we set disable_clean_session=
+    // true, but the esp-mqtt client resends SUBSCRIBE on each CONNECT
+    // anyway — resub here is safe (broker returns SUBACK either way).
+    if (client_) {
+        auto sub = [this](const std::string& prefix) {
+            if (prefix.empty()) return;
+            std::string wildcard = prefix + "/#";
+            int msg_id = esp_mqtt_client_subscribe(client_, wildcard.c_str(), 0);
+            if (msg_id < 0) {
+                ESP_LOGE(TAG, "subscribe failed: %s", wildcard.c_str());
+            } else {
+                ESP_LOGI(TAG, "subscribed: %s (msg_id=%d)", wildcard.c_str(), msg_id);
+            }
+        };
+        sub(command_prefix_);
+        sub(group_prefix_);
+        sub(broadcast_prefix_);
     }
 }
 
@@ -453,13 +468,41 @@ void HaspMqtt::on_mqtt_disconnected()
 // Downlink command queue (step 4c)
 // ---------------------------------------------------------------------------
 
-void HaspMqtt::enqueue_command(const char* subtopic, const char* payload, int payload_len)
+bool HaspMqtt::match_and_enqueue(const std::string& prefix, const char* source,
+                                 const char* topic, int topic_len,
+                                 const char* payload, int payload_len)
+{
+    // Step 4d: shared prefix-strip used for node/group/broadcast command
+    // topics. esp-mqtt does NOT NUL-terminate event->topic / event->data —
+    // caller passes explicit lengths. Returns true if the topic matched
+    // this prefix (both the "bare" == prefix and "prefix/subtopic" cases).
+    int plen = (int)prefix.size();
+    if (plen == 0 || topic_len < plen) return false;
+    if (memcmp(topic, prefix.data(), plen) != 0) return false;
+    if (topic_len != plen && topic[plen] != '/') return false;
+
+    const char* subtopic = topic + plen;
+    int         sub_len  = topic_len - plen;
+    // Skip leading '/' so "" == bare command, "page" / "p1b2.text" for subs
+    // (S3 hasp_mqtt_esp.cpp:289 does the same).
+    if (sub_len > 0 && *subtopic == '/') { subtopic++; sub_len--; }
+    char sub_buf[96];
+    if (sub_len >= (int)sizeof(sub_buf)) sub_len = sizeof(sub_buf) - 1;
+    memcpy(sub_buf, subtopic, sub_len);
+    sub_buf[sub_len] = '\0';
+    enqueue_command(sub_buf, payload, payload_len, source);
+    return true;
+}
+
+void HaspMqtt::enqueue_command(const char* subtopic, const char* payload,
+                               int payload_len, const char* source)
 {
     if (!cmd_queue_) return;
     if (!subtopic) subtopic = "";
     if (!payload || payload_len < 0) { payload = ""; payload_len = 0; }
 
     mqtt_cmd_msg_t msg = {};
+    msg.source = source ? source : "node";
     size_t tlen = strlen(subtopic);
     msg.topic   = (char*)malloc(tlen + 1);
     msg.payload = (char*)malloc((size_t)payload_len + 1);
@@ -513,7 +556,8 @@ int HaspMqtt::drain_command_queue()
         const char* subtopic = msg.topic ? msg.topic : "";
         const char* payload  = msg.payload ? msg.payload : "";
 
-        ESP_LOGI(TAG, "cmd rx  topic='%s'  payload='%s'", subtopic, payload);
+        ESP_LOGI(TAG, "cmd rx [%s]  topic='%s'  payload='%s'",
+                 msg.source ? msg.source : "?", subtopic, payload);
 
         if (subtopic[0] == '\0') {
             hasp_dispatch_command(payload);

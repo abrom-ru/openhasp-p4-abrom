@@ -66,6 +66,11 @@ private:
     std::string lwt_topic_;       // "hasp/<hostname>/LWT"
     std::string state_prefix_;    // "hasp/<hostname>/state/" (trailing slash, S3-compat)
     std::string command_prefix_;  // "hasp/<hostname>/command" (no trailing slash, S3-compat)
+    // Step 4d: additional command sources — mirror S3 mqttGroupTopic +
+    // HASP_USE_BROADCAST. Group name defaults to "plates" (S3 MQTT_GROUPNAME),
+    // configurable via NVS later. Broadcast prefix is fixed across all plates.
+    std::string group_prefix_;    // "hasp/<groupname>/command"
+    std::string broadcast_prefix_;// "hasp/broadcast/command"
 
     // Downlink command queue (step 4c). MQTT_EVENT_DATA runs on the esp-mqtt
     // task with a ~6KB stack (see S3 comment in mqtt_process_topic_payload) —
@@ -82,9 +87,19 @@ private:
     esp_err_t stop_backend();
 
     // Enqueue a received message (called from MQTT_EVENT_DATA). Copies topic
-    // and payload onto the heap; drainer frees them after dispatch.
+    // and payload onto the heap; drainer frees them after dispatch. `source`
+    // is a static-lifetime tag ("node"/"group"/"bcast") kept only for logging.
     void enqueue_command(const char* topic_after_prefix,
-                         const char* payload, int payload_len);
+                         const char* payload, int payload_len,
+                         const char* source);
+
+    // Step 4d: try to match one command prefix (node/group/broadcast) against
+    // the incoming topic. On hit, strips the prefix + optional leading '/',
+    // enqueues via enqueue_command, and returns true. `source` is stored in
+    // the queued message for log attribution. Zero-length prefix skips.
+    bool match_and_enqueue(const std::string& prefix, const char* source,
+                           const char* topic, int topic_len,
+                           const char* payload, int payload_len);
 
     void register_hasp_handlers();
     void unregister_hasp_handlers();
