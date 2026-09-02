@@ -68,6 +68,12 @@ class Page {
 using hasp::Page;
 extern hasp::Page haspPages;
 
+/* Step 7A: runtime "start page" — populated by HaspModule::set_config from
+ * /littlefs/config.json ("hasp.startpage") and NVS. Defaults to
+ * PAGE_START_INDEX so behaviour before config load matches the pre-7A hardcode.
+ * Consumed by hasp_init() via haspPages.init(haspStartPage). */
+extern uint8_t haspStartPage;
+
 #ifdef __cplusplus
 extern "C" {
 #endif

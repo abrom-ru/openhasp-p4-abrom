@@ -33,6 +33,10 @@ static void dispatch_current_page(uint8_t pageid)
     ESP_LOGI(TAG, "current page = %u", pageid);
 }
 
+/* Step 7A: HaspModule::set_config writes here from hasp.startpage; hasp_init
+ * calls haspPages.init(haspStartPage) instead of the PAGE_START_INDEX literal. */
+uint8_t haspStartPage = PAGE_START_INDEX;
+
 namespace hasp {
 
 Page::Page()

@@ -25,6 +25,7 @@
 #include "hasp_object.h" // 3f smoke: hasp_find_obj_from_page_id
 #include "hasp_font.h"   // 3h-2 stage 3 smoke: get_font() FreeType path
 #include "hasp_config.hpp"
+#include "hasp_module.hpp" // Step 7A: hasp section config adapter
 #include "hasp_fs.hpp"
 #include "hasp_ftp.hpp"
 #include "hasp_http.hpp"
@@ -75,6 +76,7 @@ static HaspWifi wifi;
 static HaspFtp ftp(mgr);   // only knows the manager
 static HaspHttp http(mgr); // only knows the manager
 static HaspMqtt mqtt(mgr); // only knows the manager
+static HaspModule hasp_module; // Step 7A: hasp section (theme, startpage) — no backend
 
 extern const esp_board_device_desc_t g_esp_board_devices[];
 
@@ -458,6 +460,10 @@ extern "C" void app_main()
     mgr.add(&http);
     mgr.add(&mqtt);
     mgr.add(&ftp);
+    // Step 7A: hasp module registered BEFORE config load so obj["hasp"] gets
+    // routed to HaspModule::set_config (populates haspThemeId/haspStartPage
+    // globals before hasp_init consumes them).
+    mgr.add(&hasp_module);
 
     // Step 6 (S3-mirror): bootstrap from /littlefs/config.json instead of
     // hardcoding creds. First boot: factory config.json seeds NVS via each

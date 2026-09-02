@@ -28,10 +28,11 @@ static constexpr const char* MQTT_TOPIC_LWT   = "LWT";
 static constexpr const char* MQTT_TOPIC_CMD   = "command";
 static constexpr const char* MQTT_LWT_ONLINE  = "online";
 static constexpr const char* MQTT_LWT_OFFLINE = "offline";
-// Step 4d: S3 hasp_conf.h defines MQTT_GROUPNAME "plates" and
-// MQTT_TOPIC_BROADCAST "broadcast". Group name is a config option (NVS in a
-// later step); broadcast is a fixed hasp/broadcast/command topic shared by
-// every plate on the broker.
+// Step 4d/7A: S3 hasp_conf.h defines MQTT_GROUPNAME "plates" and
+// MQTT_TOPIC_BROADCAST "broadcast". Group name is now runtime-configurable
+// via mqtt.group (see set_config); this constant is the compile-time fallback
+// used only when NVS/config.json have no value. Broadcast is a fixed
+// hasp/broadcast/command topic shared by every plate on the broker.
 static constexpr const char* MQTT_GROUPNAME       = "plates";
 static constexpr const char* MQTT_TOPIC_BROADCAST = "broadcast";
 
@@ -79,11 +80,16 @@ esp_err_t HaspMqtt::get_config(JsonObject obj) const
     if (!client_id_.empty()) client_id = client_id_;
     else nvs_get_string("client_id", client_id);
 
+    std::string group;
+    if (!group_.empty()) group = group_;
+    else nvs_get_string("group", group);
+
     mqtt["host"]      = host;
     mqtt["port"]      = port;
     mqtt["user"]      = user;
     mqtt["password"]  = "******";
     mqtt["client_id"] = client_id;
+    mqtt["group"]     = group;
 
     // mode is handled by base later; for MVP you can store it the same way as other services
     return ESP_OK;
@@ -116,6 +122,12 @@ esp_err_t HaspMqtt::set_config(JsonObjectConst obj)
         client_id_ = mqtt["client_id"].as<std::string>();
         nvs_set_string("client_id", client_id_);
     }
+    // Step 7A: mqtt.group -> group_prefix_ at start_backend. S3 puts group
+    // in the mqtt section (mqttSetConfig FP_CONFIG_GROUP_TOPIC).
+    if (mqtt["group"].is<const char*>()) {
+        group_ = mqtt["group"].as<std::string>();
+        nvs_set_string("group", group_);
+    }
     return ESP_OK;
 }
 
@@ -127,6 +139,7 @@ esp_err_t HaspMqtt::load_from_nvs()
     nvs_get_string("user", user_);
     nvs_get_string("password", password_);
     nvs_get_string("client_id", client_id_);
+    nvs_get_string("group", group_);
 
     if (host_.empty()) {
         ESP_LOGW(TAG, "No MQTT host configured");
@@ -184,10 +197,12 @@ esp_err_t HaspMqtt::start_backend()
     // "<prefix>/#" (matches parent + all subs per MQTT spec 4.7).
     // Strip in MQTT_EVENT_DATA leaves "" (bare command) or "/subtopic".
     command_prefix_ = std::string(MQTT_PREFIX) + "/" + hostname + "/" + MQTT_TOPIC_CMD;
-    // Step 4d: parallel prefixes for group + broadcast command topics.
+    // Step 4d/7A: parallel prefixes for group + broadcast command topics.
     // Same layout as command_prefix_ (no trailing slash); subscribe with "/#"
     // and MQTT_EVENT_DATA strips the prefix the same way for all three.
-    group_prefix_     = std::string(MQTT_PREFIX) + "/" + MQTT_GROUPNAME + "/" + MQTT_TOPIC_CMD;
+    // Group name from config (mqtt.group), compile-time MQTT_GROUPNAME fallback.
+    const char* gname = group_.empty() ? MQTT_GROUPNAME : group_.c_str();
+    group_prefix_     = std::string(MQTT_PREFIX) + "/" + gname + "/" + MQTT_TOPIC_CMD;
     broadcast_prefix_ = std::string(MQTT_PREFIX) + "/" + MQTT_TOPIC_BROADCAST + "/" + MQTT_TOPIC_CMD;
 
     ESP_LOGI(TAG, "client_id=%s  lwt=%s  state=%s*  cmd=%s[/#]  grp=%s[/#]  bcast=%s[/#]",

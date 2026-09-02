@@ -7,6 +7,11 @@
   "mqtt": {
     "host": "192.168.1.105",
     "port": 1883,
-    "client_id": "plate"
+    "client_id": "plate",
+    "group": "plates"
+  },
+  "hasp": {
+    "theme": 2,
+    "startpage": 1
   }
 }

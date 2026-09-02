@@ -33,7 +33,9 @@ extern "C" esp_err_t hasp_init(void)
      * lv_obj_report_style_change, but doing it first is cleaner and cheaper. */
     hasp_set_theme(haspThemeId);
     /* 3b: allocate the N page screens and load page 1. Caller holds LVGL lock. */
-    haspPages.init(PAGE_START_INDEX);
+    /* Step 7A: start_page comes from HaspModule config (hasp.startpage in
+     * NVS/config.json); defaults to PAGE_START_INDEX before config load. */
+    haspPages.init(haspStartPage);
 
     /* Step 5: autoload pages.jsonl from LittleFS, same slot as S3 haspSetup
      * (hasp.cpp:613) — hasp_load_json() runs after pages exist so the parser

@@ -9,10 +9,12 @@ idf_component_register(
         "src/hasp_attribute.cpp"
         "src/hasp_font.cpp"
         "src/hasp_theme.cpp"
+        "src/hasp_module.cpp"
     INCLUDE_DIRS "include"
     REQUIRES
         bblanchon__arduinojson
         lvgl__lvgl
         hasp_log
         hasp_mqtt
+        hasp_service
 )

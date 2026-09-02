@@ -59,6 +59,11 @@ private:
     std::string user_;
     std::string password_;
     std::string client_id_;
+    // Step 7A: group name for the "hasp/<group>/command" topic. S3 defines
+    // MQTT_GROUPNAME "plates" in hasp_conf.h and puts it in the mqtt section
+    // of the config (mqttGetConfig FP_CONFIG_GROUP_TOPIC). Empty string means
+    // "fall back to compile-time default at start_backend time".
+    std::string group_;
 
     // Runtime-built at start_backend (must outlive the mqtt client because
     // esp-mqtt stores raw pointers into these strings via c_str()).
