@@ -146,6 +146,7 @@ static void app_ui_init()
             ESP_LOGI(TAG, "font smoke: cache hit same ptr? %s", (f24 == f24b) ? "yes" : "NO");
         }
 
+#if 0 // TEMP: hide dev-smoke widgets while testing 480x480 pages.jsonl.
         // Step 3a widgets on page 1 (all six supported obj types).
         hasp_dispatch_jsonl(
             "{\"page\":1,\"id\":1,\"obj\":\"label\","
@@ -367,6 +368,7 @@ static void app_ui_init()
         hasp_dispatch_jsonl(
             "{\"page\":5,\"id\":50,\"obj\":\"obj\","
             "\"x\":700,\"y\":270,\"w\":300,\"h\":300,\"bg_color\":\"#2040a0\"}");
+#endif // TEMP 480x480 test
 
         // 3d demo: auto-toggle pages 1..6 via dispatch every 4s (proves the
         // "page N" text command reaches haspPages.set()). Page 6 comes from

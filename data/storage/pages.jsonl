@@ -1,16 +1,172 @@
-// HASP шаг 5 — smoke pages.jsonl. Автозагружается из /littlefs/pages.jsonl
-// при hasp_init() (см. components/hasp/src/hasp.cpp). Строки: JSONL по одной
-// на объект. Комментарии ('#' и '//') и пустые строки игнорируются.
-// Страница 6 выбрана намеренно: страницы 1-5 занимает хардкод из main.cpp.
+{"page": 1,"id": 0,"bg_color": "#14110E","text_color": "#E7E3DC","swipe":{"left":"page 2"}}
+{"page": 1,"id": 10,"obj": "label","x": 20,"y": 20,"w": 120,"h": 18,"text": "МОСКВА","text_font": "montserrat14","text_color": "#8A8377","click": false}
+{"page": 1,"id": 11,"obj": "btn","x": 360,"y": 14,"w": 120,"h": 28,"text": "ONLINE","text_font": "montserrat14","text_color": "#4FA86E","align": 2,"bg_opa": 0,"border_side": 0,"radius": 0,"action": {"up": "page 12"}}
+{"page": 1,"id": 20,"obj": "label","x": 0,"y": 80,"w": 480,"h": 22,"text": "ВОСКРЕСЕНЬЕ","template":"%A","text_font": "montserrat18","text_color": "#8A8377","align": 1,"click": false}
+{"page": 1,"id": 21,"obj": "label","x": 0,"y": 120,"w": 480,"h": 170,"text":"88:88","template":"%H:%M","text_font": "montserrat128","align": 1,"click": false}
+{"page": 1,"id": 22,"obj": "label","x": 0,"y": 296,"w": 480,"h": 30,"text":"2024/01/01","template":"%Y/%m/%d","text_font": "montserrat24","align": 1,"click": false}
+{"page": 1,"id": 30,"obj": "line","x": 220,"y": 346,"w": 40,"h": 1,"points":[[0,0],[40,0]],"line_color": "#4A463F","line_width": 1,"click": false}
+{"page": 1,"id": 40,"obj": "label","x": 86,"y": 382,"w": 48,"h": 48,"text": "\uE599","text_font":50,"text_color": "#D79A4A","align": 1,"click": false}
+{"page": 1,"id": 41,"obj": "label","x": 156,"y": 380,"w": 130,"h": 60,"text": "14°","text_font": "montserrat56","click": false}
+{"page": 1,"id": 42,"obj": "line","x": 300,"y": 384,"w": 1,"h": 48,"points":[[0,0],[0,48]],"line_color": "#4A463F","line_width": 1,"click": false}
+{"page": 1,"id": 43,"obj": "label","x": 314,"y": 380,"w": 150,"h": 22,"text": "Ясно","text_font": "montserrat16","click": false}
+{"page": 1,"id": 44,"obj": "label","x": 314,"y": 406,"w": 150,"h": 18,"text": "МОСКВА 8°-17°","text_font": "montserrat14","text_color": "#8A8377","click": false}
 
-{"page":6,"id":1,"obj":"label","x":40,"y":30,"w":900,"h":40,"text":"HASP шаг 5 — pages.jsonl autoload OK","text_font":"openhasp28"}
+{"page": 2, "id": 0, "bg_color": "#14110E", "text_color": "#E7E3DC", "swipe": {"left": "page 3", "right": "page 1"}}
+{"page": 2, "id": 10, "obj": "obj", "x": 0, "y": 0, "w": 480, "h": 34, "bg_color": "#1A1713", "radius": 0, "border_width": 0, "click": false, "border_side": 0,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 2, "id": 11, "obj": "label", "x": 16, "y": 7, "w": 280, "h": 20, "text": "ТЕРМОСТАТ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+{"page": 2, "id": 12, "obj": "label", "x": 384, "y": 7, "w": 80, "h": 20, "text": "88:88", "text_font": "montserrat18", "align": 2, "click": false, "text_color": "#E7E3DC", "template": "%H:%M"}
 
-// Кнопка + свитч в одной строке смысла нет — по одной на JSONL-строку.
-{"page":6,"id":2,"obj":"btn","x":40,"y":100,"w":220,"h":60,"text":"AUTOLOAD","bg_color":"#4040ff"}
-{"page":6,"id":3,"obj":"switch","x":300,"y":110,"w":80,"h":40,"val":1}
-{"page":6,"id":4,"obj":"slider","x":40,"y":200,"w":600,"h":24,"val":42,"min":0,"max":100}
-{"page":6,"id":5,"obj":"bar","x":40,"y":250,"w":600,"h":20,"val":75,"bg_color1":"#00c800"}
+{"page": 2, "id": 21, "obj": "label", "x": 250, "y": 44, "w": 220, "h": 20, "text": "Температура", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#8A8377"}
+{"page": 2, "id": 22, "obj": "label", "x": 336, "y": 44, "w": 120, "h": 20, "text": "21.4°", "text_font": "montserrat18", "align": 2, "click": false, "text_color": "#E7E3DC"}
 
-// Пустая строка выше и стиль-комментарии ниже — проверяем что парсер не ломается.
-# hash-комментарий тоже валидный
-{"page":6,"id":6,"obj":"led","x":700,"y":100,"w":40,"h":40,"bg_color":"#ff8000"}
+{"page": 2, "id": 30, "obj": "btn", "x": 36, "y": 109, "w": 70, "h": 70, "text": "\uE374", "text_font": 24, "radius": 35, "align": 1, "toggle": false, "bg_color": "#1A1713", "bg_color01": "#E5AC68", "bg_color02": "#B87A30", "border_color": "#4A463F", "border_color01": "#EBA85C", "border_color02": "#E5AC68","border_width": 2,"bg_grad_dir": 0, "bg_grad_dir02": 0, "text_color": "#D79A4A"}
+{"page": 2, "id": 31, "obj": "label", "x": 116, "y": 74, "w": 248, "h": 140, "text": "23", "text_font": "montserrat128", "align": 1, "click": false, "text_color": "#E7E3DC"}
+{"page": 2, "id": 32, "obj": "btn", "x": 374, "y": 109, "w": 70, "h": 70, "text": "\uE415", "text_font": 24, "radius": 35, "align": 1, "toggle": false, "bg_color": "#1A1713", "bg_color01": "#E5AC68", "bg_color02": "#B87A30", "border_color": "#4A463F", "border_color01": "#EBA85C", "border_color02": "#E5AC68","border_width": 2,"bg_grad_dir": 0, "bg_grad_dir02": 0, "text_color": "#D79A4A"}
+
+{"page": 2, "id": 45, "obj": "label", "x": 24, "y": 239, "w": 130, "h": 20, "text": "СКОРОСТЬ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+{"page": 2, "id": 46, "obj": "btn", "x": 196, "y": 231, "w": 82, "h": 36, "radius": 18, "text": "Авто", "text_font": "16", "align": 1, "toggle": true, "val": 0, "bg_color": "#14110E", "bg_color01": "#B87A30", "bg_color02": "#A06A2A", "bg_color03": "#A06A2A", "text_color": "#8A8377", "text_color01": "#14110E", "border_color": "#4A463F", "border_color01": "#EBA85C", "border_width": 1, "bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 2, "id": 47, "obj": "btn", "x": 286, "y": 231, "w": 82, "h": 36, "radius": 18, "text": "Мин", "text_font": "16", "align": 1, "toggle": true, "val": 0, "bg_color": "#14110E", "bg_color01": "#B87A30", "bg_color02": "#A06A2A", "bg_color03": "#A06A2A", "text_color": "#8A8377", "text_color01": "#14110E", "border_color": "#4A463F", "border_color01": "#EBA85C", "border_width": 1, "bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 2, "id": 48, "obj": "btn", "x": 376, "y": 231, "w": 80, "h": 36, "radius": 18, "text": "Макс", "text_font": "16", "align": 1, "toggle": true, "val": 0, "bg_color": "#14110E", "bg_color01": "#B87A30", "bg_color02": "#A06A2A", "bg_color03": "#A06A2A", "text_color": "#8A8377", "text_color01": "#14110E", "border_color": "#4A463F", "border_color01": "#EBA85C", "border_width": 1, "bg_grad_dir": 0, "bg_grad_dir02": 0}
+
+{"page": 2, "id": 44, "obj": "label", "x": 24, "y": 344, "w": 200, "h": 20, "text": "РЕЖИМЫ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+
+{"page": 2, "id": 40, "obj": "obj", "x": 24, "y": 374, "w": 432, "h": 80, "bg_color": "#1A1713", "radius": 12, "border_width": 0, "click": false,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 2, "id": 41, "obj": "btn", "x": 28, "y": 382, "w": 140, "h": 64, "radius": 8, "text": "Выключить", "text_font": "20", "align": 1, "toggle": true, "val": 0, "bg_color": "#1A1713", "bg_color01": "#B87A30", "bg_color02": "#A06A2A", "bg_color03": "#A06A2A", "text_color": "#E7E3DC", "text_color01": "#14110E", "border_width": 0,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 2, "id": 42, "obj": "btn", "x": 170, "y": 382, "w": 140, "h": 64, "radius": 8, "text": "\uE238 Нагрев", "text_font": "20", "align": 1, "toggle": true, "val": 0, "bg_color": "#1A1713", "bg_color01": "#B87A30", "bg_color02": "#A06A2A", "bg_color03": "#A06A2A", "text_color": "#E7E3DC", "text_color01": "#14110E", "border_width": 0,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 2, "id": 43, "obj": "btn", "x": 312, "y": 382, "w": 140, "h": 64, "radius": 8, "text": "\uE717 Охлажд.", "text_font": "20", "align": 1, "toggle": true, "val": 0, "bg_color": "#1A1713", "bg_color01": "#B87A30", "bg_color02": "#A06A2A", "bg_color03": "#A06A2A", "text_color": "#E7E3DC", "text_color01": "#14110E", "border_width": 0,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+
+{"page": 3, "id": 0, "bg_color": "#14110E", "text_color": "#E7E3DC", "swipe": {"left": "page 4", "right": "page 2"}}
+{"page": 3, "id": 10, "obj": "obj", "x": 0, "y": 0, "w": 480, "h": 34, "bg_color": "#1A1713", "radius": 0, "border_width": 0, "click": false, "border_side": 0,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 3, "id": 11, "obj": "label", "x": 16, "y": 7, "w": 280, "h": 20, "text": "ШТОРЫ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+{"page": 3, "id": 12, "obj": "label", "x": 384, "y": 7, "w": 80, "h": 20, "text": "88:88", "text_font": "montserrat18", "align": 2, "click": false, "text_color": "#E7E3DC", "template": "%H:%M"}
+
+{"page": 3, "id": 20, "obj": "obj", "x": 16, "y": 44, "w": 448, "h": 110, "bg_color": "#1A1713", "radius": 12, "border_width": 0, "click": false,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 3, "id": 21, "obj": "label", "x": 30, "y": 56, "w": 40, "h": 40, "text": "\uE0AC", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 3, "id": 22, "obj": "label", "x": 88, "y": 64, "w": 240, "h": 24, "text": "Гостиная", "text_font": "montserrat20", "align": 0, "click": false, "text_color": "#E7E3DC"}
+{"page": 3, "id": 23, "obj": "label", "x": 340, "y": 64, "w": 110, "h": 24, "text": "80%", "text_font": "montserrat20", "align": 2, "click": false, "text_color": "#D79A4A"}
+
+{"page":3,"id":24,"obj":"slider","x":30,"y":119,"w":340,"h":20,"val":80,"min":0,"max":100,"radius": 14,"bg_opa": 0,"bg_color10": "#D79A4A","bg_color20": "#D79A4A","bg_grad_dir": 0,"bg_grad_dir10": 0,"bg_grad_dir20": 0,"radius20": 100,"border_width": 0,"border_color20": "#000000","border_width20": 2}
+
+{"page": 3, "id": 25, "obj": "btn", "x": 386, "y": 113, "w": 64, "h": 32, "text": "STOP", "text_font": "montserrat14", "radius": 8, "align": 1, "toggle": false, "bg_opa": 255, "bg_opa01": 255, "bg_opa02": 255, "bg_color": "#1A1713", "bg_color01": "#E5AC68", "bg_color02": "#E5AC68", "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#EBA85C", "border_color02": "#B87A30", "border_width": 2, "border_width01": 2, "border_width02": 2,"bg_grad_dir": 0, "bg_grad_dir02": 0, "text_color": "#D79A4A"}
+
+{"page": 3, "id": 30, "obj": "obj", "x": 16, "y": 164, "w": 448, "h": 110, "bg_color": "#1A1713", "radius": 12, "border_width": 0, "click": false,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 3, "id": 31, "obj": "label", "x": 30, "y": 176, "w": 40, "h": 40, "text": "\uE0AC", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 3, "id": 32, "obj": "label", "x": 88, "y": 184, "w": 240, "h": 24, "text": "Спальня", "text_font": "montserrat20", "align": 0, "click": false, "text_color": "#E7E3DC"}
+{"page": 3, "id": 33, "obj": "label", "x": 340, "y": 184, "w": 110, "h": 24, "text": "50%", "text_font": "montserrat20", "align": 2, "click": false, "text_color": "#D79A4A"}
+
+{"page": 3, "id": 34, "obj": "slider", "x": 30, "y": 239, "w": 340, "h": 20, "val": 50, "min": 0, "max": 100,"radius": 14,"bg_opa": 0,"bg_color10": "#D79A4A","bg_color20": "#D79A4A","bg_grad_dir": 0,"bg_grad_dir10": 0,"bg_grad_dir20": 0,"radius20": 100,"border_width": 0,"border_color20": "#000000","border_width20": 2}
+
+{"page": 3, "id": 35, "obj": "btn", "x": 386, "y": 233, "w": 64, "h": 32, "text": "STOP", "text_font": "montserrat14", "radius": 8, "align": 1, "toggle": false, "bg_opa": 255, "bg_opa01": 255, "bg_opa02": 255, "bg_color": "#1A1713", "bg_color01": "#E5AC68", "bg_color02": "#E5AC68", "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#EBA85C", "border_color02": "#B87A30", "border_width": 2, "border_width01": 2, "border_width02": 2,"bg_grad_dir": 0, "bg_grad_dir02": 0, "text_color": "#D79A4A"}
+
+{"page": 3, "id": 40, "obj": "label", "x": 24, "y": 314, "w": 200, "h": 20, "text": "СЦЕНАРИИ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+
+{"page": 3, "id": 50, "obj": "btn", "x": 24, "y": 344, "w": 210, "h": 110, "radius": 12, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 3, "id": 51, "obj": "label", "x": 38, "y": 356, "w": 36, "h": 36, "text": "\uE05D", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 3, "id": 52, "obj": "label", "x": 38, "y": 404, "w": 184, "h": 28, "text": "Открыть всё", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 3, "id": 60, "obj": "btn", "x": 246, "y": 344, "w": 210, "h": 110, "radius": 12, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 3, "id": 61, "obj": "label", "x": 260, "y": 356, "w": 36, "h": 36, "text": "\uE045", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 3, "id": 62, "obj": "label", "x": 260, "y": 404, "w": 184, "h": 28, "text": "Закрыть всё", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 4, "id": 0, "bg_color": "#14110E", "text_color": "#E7E3DC", "swipe": {"left": "page 5", "right": "page 3"}}
+{"page": 4, "id": 10, "obj": "obj", "x": 0, "y": 0, "w": 480, "h": 34, "bg_color": "#1A1713", "radius": 0, "border_width": 0, "click": false, "border_side": 0,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 4, "id": 11, "obj": "label", "x": 16, "y": 7, "w": 280, "h": 20, "text": "ОСВЕЩЕНИЕ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+{"page": 4, "id": 12, "obj": "label", "x": 384, "y": 7, "w": 80, "h": 20, "text": "88:88", "text_font": "montserrat18", "align": 2, "click": false, "text_color": "#E7E3DC", "template": "%H:%M"}
+
+{"page": 4, "id": 20, "obj": "obj", "x": 16, "y": 44, "w": 448, "h": 110, "bg_color": "#1A1713", "radius": 12, "border_width": 0, "click": false,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 4, "id": 21, "obj": "label", "x": 30, "y": 56, "w": 40, "h": 40, "text": "\uE769", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 4, "id": 22, "obj": "label", "x": 88, "y": 64, "w": 220, "h": 24, "text": "Люстра", "text_font": "montserrat20", "align": 0, "click": false, "text_color": "#E7E3DC"}
+{"page": 4, "id": 23, "obj": "label", "x": 314, "y": 64, "w": 70, "h": 24, "text": "75%", "text_font": "montserrat20", "align": 2, "click": false, "text_color": "#D79A4A"}
+{"page":4,"id":25,"obj":"switch","x":396,"y":68,"w":44,"h":22,"val":1,"radius":100,"radius20":100,"ext_click_h":20,"ext_click_v":20,"bg_color":"#2B2B2B","bg_color10":"#C57E2E","bg_grad_color10":"#C57E2E","bg_color20":"#E89B3C","bg_grad_color20":"#E89B3C","bg_color21":"#E89B3C","bg_grad_color21":"#E89B3C"}
+{"page": 4, "id": 24, "obj": "slider", "x": 30, "y": 119, "w": 418,"h":20,"val":80,"min":0,"max":100,"radius": 14,"bg_opa": 0,"bg_color10": "#D79A4A","bg_color20": "#D79A4A","bg_grad_dir": 0,"bg_grad_dir10": 0,"bg_grad_dir20": 0,"radius20": 100,"border_width": 0,"border_color20": "#000000","border_width20": 2}
+
+{"page": 4, "id": 30, "obj": "obj", "x": 16, "y": 164, "w": 448, "h": 110, "bg_color": "#1A1713", "radius": 12, "border_width": 0, "click": false,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 4, "id": 31, "obj": "label", "x": 30, "y": 176, "w": 40, "h": 40, "text": "\uE8DD", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 4, "id": 32, "obj": "label", "x": 88, "y": 184, "w": 220, "h": 24, "text": "Торшер", "text_font": "montserrat20", "align": 0, "click": false, "text_color": "#E7E3DC"}
+{"page": 4, "id": 33, "obj": "label", "x": 314, "y": 184, "w": 70, "h": 24, "text": "35%", "text_font": "montserrat20", "align": 2, "click": false, "text_color": "#D79A4A"}
+{"page": 4, "id": 35, "obj": "switch", "x": 396, "y": 188, "w": 44,"h":22,"val":1,"radius":100,"radius20":100,"ext_click_h":20,"ext_click_v":20,"bg_color":"#2B2B2B","bg_color10":"#C57E2E","bg_grad_color10":"#C57E2E","bg_color20":"#E89B3C","bg_grad_color20":"#E89B3C","bg_color21":"#E89B3C","bg_grad_color21":"#E89B3C"}
+{"page": 4, "id": 34, "obj": "slider", "x": 30, "y": 239, "w": 418,"h":20,"val":80,"min":0,"max":100,"radius": 14,"bg_opa": 0,"bg_color10": "#D79A4A","bg_color20": "#D79A4A","bg_grad_dir": 0,"bg_grad_dir10": 0,"bg_grad_dir20": 0,"radius20": 100,"border_width": 0,"border_color20": "#000000","border_width20": 2}
+
+{"page": 4, "id": 40, "obj": "label", "x": 24, "y": 314, "w": 200, "h": 20, "text": "СЦЕНАРИИ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+
+{"page": 4, "id": 50, "obj": "btn", "x": 24, "y": 344, "w": 210, "h": 110, "radius": 12, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 4, "id": 51, "obj": "label", "x": 38, "y": 356, "w": 36, "h": 36, "text": "\uE335", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 4, "id": 52, "obj": "label", "x": 38, "y": 404, "w": 184, "h": 28, "text": "Всё включить", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 4, "id": 60, "obj": "btn", "x": 246, "y": 344, "w": 210, "h": 110, "radius": 12, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 4, "id": 61, "obj": "label", "x": 260, "y": 356, "w": 36, "h": 36, "text": "\uE594", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 4, "id": 62, "obj": "label", "x": 260, "y": 404, "w": 184, "h": 28, "text": "Всё выключить", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 5, "id": 0, "bg_color": "#14110E", "text_color": "#E7E3DC", "swipe": {"left": "page 6", "right": "page 4"}}
+{"page": 5, "id": 10, "obj": "obj", "x": 0, "y": 0, "w": 480, "h": 34, "bg_color": "#1A1713", "radius": 0, "border_width": 0, "click": false, "border_side": 0,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 5, "id": 11, "obj": "label", "x": 16, "y": 7, "w": 280, "h": 20, "text": "УСТРОЙСТВА", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+{"page": 5, "id": 12, "obj": "label", "x": 384, "y": 7, "w": 80, "h": 20, "text": "88:88", "text_font": "montserrat18", "align": 2, "click": false, "text_color": "#E7E3DC", "template": "%H:%M"}
+
+{"page": 5, "id": 20, "obj": "btn", "x": 24, "y": 44, "w": 210, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 1, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 5, "id": 21, "obj": "label", "x": 38, "y": 56, "w": 36, "h": 36, "text": "\uE769", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 5, "id": 22, "obj": "label", "x": 38, "y": 104, "w": 184, "h": 28, "text": "Люстра", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 5, "id": 30, "obj": "btn", "x": 246, "y": 44, "w": 210, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 5, "id": 31, "obj": "label", "x": 260, "y": 56, "w": 36, "h": 36, "text": "\uE8DD", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 5, "id": 32, "obj": "label", "x": 260, "y": 104, "w": 184, "h": 28, "text": "Торшер", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 5, "id": 40, "obj": "btn", "x": 24, "y": 164, "w": 210, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 1, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 5, "id": 41, "obj": "label", "x": 38, "y": 176, "w": 36, "h": 36, "text": "\uE502", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 5, "id": 42, "obj": "label", "x": 38, "y": 224, "w": 184, "h": 28, "text": "Телевизор", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 5, "id": 50, "obj": "btn", "x": 246, "y": 164, "w": 210, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 5, "id": 51, "obj": "label", "x": 260, "y": 176, "w": 36, "h": 36, "text": "\uE6A5", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 5, "id": 52, "obj": "label", "x": 260, "y": 224, "w": 184, "h": 28, "text": "Розетка", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 5, "id": 55, "obj": "label", "x": 24, "y": 314, "w": 200, "h": 20, "text": "СЦЕНАРИИ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+
+{"page": 5, "id": 60, "obj": "btn", "x": 24, "y": 344, "w": 210, "h": 110, "radius": 12, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 5, "id": 61, "obj": "label", "x": 38, "y": 356, "w": 36, "h": 36, "text": "\uE502", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 5, "id": 62, "obj": "label", "x": 38, "y": 404, "w": 184, "h": 28, "text": "Кино", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 5, "id": 70, "obj": "btn", "x": 246, "y": 344, "w": 210, "h": 110, "radius": 12, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 5, "id": 71, "obj": "label", "x": 260, "y": 356, "w": 36, "h": 36, "text": "\uE594", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 5, "id": 72, "obj": "label", "x": 260, "y": 404, "w": 184, "h": 28, "text": "Всё выключить", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 6, "id": 0, "bg_color": "#14110E", "text_color": "#E7E3DC", "swipe": {"right": "page 5"}}
+{"page": 6, "id": 10, "obj": "obj", "x": 0, "y": 0, "w": 480, "h": 34, "bg_color": "#1A1713", "radius": 0, "border_width": 0, "click": false, "border_side": 0,"bg_grad_dir": 0, "bg_grad_dir02": 0}
+{"page": 6, "id": 11, "obj": "label", "x": 16, "y": 7, "w": 280, "h": 20, "text": "СЦЕНАРИИ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+{"page": 6, "id": 12, "obj": "label", "x": 384, "y": 7, "w": 80, "h": 20, "text": "88:88", "text_font": "montserrat18", "align": 2, "click": false, "text_color": "#E7E3DC", "template": "%H:%M"}
+
+{"page": 6, "id": 20, "obj": "btn", "x": 24, "y": 44, "w": 138, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 6, "id": 21, "obj": "label", "x": 38, "y": 52, "w": 40, "h": 40, "text": "\uE176", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 6, "id": 22, "obj": "label", "x": 38, "y": 120, "w": 110, "h": 28, "text": "Утро", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 6, "id": 30, "obj": "btn", "x": 171, "y": 44, "w": 138, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 6, "id": 31, "obj": "label", "x": 185, "y": 52, "w": 40, "h": 40, "text": "\uE322", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 6, "id": 32, "obj": "label", "x": 185, "y": 120, "w": 110, "h": 28, "text": "Работа", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 6, "id": 40, "obj": "btn", "x": 318, "y": 44, "w": 138, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 1, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 6, "id": 41, "obj": "label", "x": 332, "y": 52, "w": 40, "h": 40, "text": "\uE502", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 6, "id": 42, "obj": "label", "x": 332, "y": 120, "w": 110, "h": 28, "text": "Кино", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 6, "id": 50, "obj": "btn", "x": 24, "y": 164, "w": 138, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 6, "id": 51, "obj": "label", "x": 38, "y": 172, "w": 40, "h": 40, "text": "\uEA70", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 6, "id": 52, "obj": "label", "x": 38, "y": 240, "w": 110, "h": 28, "text": "Ужин", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 6, "id": 60, "obj": "btn", "x": 171, "y": 164, "w": 138, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 6, "id": 61, "obj": "label", "x": 185, "y": 172, "w": 40, "h": 40, "text": "\uE95F", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 6, "id": 62, "obj": "label", "x": 185, "y": 240, "w": 110, "h": 28, "text": "Чтение", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 6, "id": 70, "obj": "btn", "x": 318, "y": 164, "w": 138, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 6, "id": 71, "obj": "label", "x": 332, "y": 172, "w": 40, "h": 40, "text": "\uE594", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 6, "id": 72, "obj": "label", "x": 332, "y": 240, "w": 110, "h": 28, "text": "Ночь", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 6, "id": 79, "obj": "label", "x": 24, "y": 314, "w": 200, "h": 20, "text": "СЦЕНАРИИ", "text_font": "montserrat14", "align": 0, "click": false, "text_color": "#8A8377"}
+
+{"page": 6, "id": 80, "obj": "btn", "x": 24, "y": 344, "w": 138, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 6, "id": 81, "obj": "label", "x": 38, "y": 352, "w": 40, "h": 40, "text": "\uE004", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 6, "id": 82, "obj": "label", "x": 38, "y": 420, "w": 110, "h": 28, "text": "Гости", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 6, "id": 90, "obj": "btn", "x": 171, "y": 344, "w": 138, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 6, "id": 91, "obj": "label", "x": 185, "y": 352, "w": 40, "h": 40, "text": "\uE10B", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 6, "id": 92, "obj": "label", "x": 185, "y": 420, "w": 110, "h": 28, "text": "Отъезд", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
+
+{"page": 6, "id": 100, "obj": "btn", "x": 318, "y": 344, "w": 138, "h": 110, "radius": 14, "text": "", "toggle": true, "val": 0, "bg_opa": 0, "bg_opa01": 0, "bg_opa02": 0, "border_opa": 255, "border_opa01": 255, "border_opa02": 255, "border_color": "#4A463F", "border_color01": "#D79A4A", "border_color02": "#B87A30", "border_width": 2}
+{"page": 6, "id": 101, "obj": "label", "x": 332, "y": 352, "w": 40, "h": 40, "text": "\uE425", "text_font": "24", "align": 0, "click": false, "text_color": "#D79A4A"}
+{"page": 6, "id": 102, "obj": "label", "x": 332, "y": 420, "w": 110, "h": 28, "text": "Всё выкл", "text_font": "montserrat18", "align": 0, "click": false, "text_color": "#E7E3DC"}
