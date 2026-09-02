@@ -236,6 +236,12 @@ esp_err_t HaspHttp::set_config(JsonObjectConst obj)
             password_ = pw;
             nvs_set_string("password", password_);
         }
+        else if (password_.empty())
+        {
+            // S3-mirror: mask == "keep NVS secret"; hydrate from NVS now so
+            // Basic Auth stays enforced after a config-only load path.
+            nvs_get_string("password", password_);
+        }
     }
 
     if (http["port"].is<uint16_t>() || http["port"].is<uint32_t>() || http["port"].is<int>())

@@ -123,6 +123,10 @@ esp_err_t HaspMqtt::set_config(JsonObjectConst obj)
         if (pw != "********") {
             password_ = pw;
             nvs_set_string("password", password_);
+        } else if (password_.empty()) {
+            // S3-mirror: mask == "keep NVS secret"; hydrate from NVS now
+            // so start_backend has the real credential.
+            nvs_get_string("password", password_);
         }
     }
     if (mqtt["client_id"].is<const char*>()) {

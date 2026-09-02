@@ -73,6 +73,13 @@ esp_err_t HaspWifi::set_config(JsonObjectConst obj)
             password_ = pw;
             nvs_set_string("password", password_);
         }
+        else if (password_.empty())
+        {
+            // S3-mirror: masked value means "keep NVS secret"; hydrate now
+            // so start_backend has the real credential (its ssid_.empty()
+            // NVS-fallback would otherwise be skipped after a config load).
+            nvs_get_string("password", password_);
+        }
     }
 
     if (wifi["hostname"].is<const char *>())
