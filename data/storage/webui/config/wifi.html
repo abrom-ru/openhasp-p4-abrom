@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Wi-Fi — openHASP</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav><a href="/config">← Настройки</a></nav>
+  <h1>Wi-Fi</h1>
+
+  <form id="f">
+    <div>
+      <label for="ssid">SSID</label>
+      <input id="ssid" name="ssid" type="text" required maxlength="31">
+    </div>
+    <div>
+      <label for="password">Пароль</label>
+      <input id="password" name="password" type="password" maxlength="63" placeholder="••••••">
+    </div>
+    <div>
+      <label for="hostname">Hostname</label>
+      <input id="hostname" name="hostname" type="text" maxlength="31">
+    </div>
+    <div class="row">
+      <button type="submit">Сохранить</button>
+      <a class="button" href="/config">Отмена</a>
+    </div>
+    <div id="status"></div>
+  </form>
+
+<script src="/config/form.js"></script>
+<script>bindConfigForm("wifi", ["ssid", "password", "hostname"]);</script>
+</body>
+</html>

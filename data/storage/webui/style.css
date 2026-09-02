@@ -1,0 +1,138 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #111;
+  color: #ddd;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+body {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  line-height: 1.5;
+}
+
+h1 {
+  font-size: 20px;
+  border-bottom: 1px solid #333;
+  padding-bottom: 8px;
+  margin: 0 0 16px;
+}
+
+h2 {
+  font-size: 16px;
+  color: #6cf;
+  margin: 24px 0 8px;
+}
+
+nav {
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+nav a {
+  color: #6cf;
+  text-decoration: none;
+  margin-right: 12px;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+
+form {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+
+input[type=text],
+input[type=password],
+input[type=number] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #333;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 14px;
+}
+
+input:focus {
+  outline: none;
+  border-color: #6cf;
+}
+
+button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 4px;
+  background: #2b7;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover { background: #38c; }
+button.red { background: #b33; }
+button.red:hover { background: #d44; }
+button.plain { background: #333; }
+button.plain:hover { background: #444; }
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.row button, .row a.button {
+  flex: 1 1 auto;
+}
+
+a.button {
+  display: inline-block;
+  text-align: center;
+  padding: 10px 16px;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+a.button:hover { background: #444; }
+
+#status {
+  min-height: 20px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+#status.ok    { background: #163; color: #dfd; }
+#status.err   { background: #611; color: #fdd; }
+#status.info  { background: #234; color: #cef; }
+
+pre {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
+}

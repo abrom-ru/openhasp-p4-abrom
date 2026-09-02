@@ -11,6 +11,11 @@
     "group": "plates",
     "teleperiod": 300
   },
+  "http": {
+    "user": "admin",
+    "password": "",
+    "port": 80
+  },
   "hasp": {
     "theme": 2,
     "startpage": 1

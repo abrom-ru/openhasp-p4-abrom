@@ -9,6 +9,9 @@ idf_component_register(
     PRIV_REQUIRES
             bblanchon__arduinojson
             esp_hw_support
+            esp_timer
+            esp_lvgl_port
+            hasp
             hasp_config
 )
 

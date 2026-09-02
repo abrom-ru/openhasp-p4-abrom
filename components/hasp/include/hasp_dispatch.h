@@ -49,6 +49,13 @@ void dispatch_state_subtopic(const char* subtopic, const char* payload);
  * Caller must hold the LVGL lock (reads lv_display_get_default). */
 void hasp_dispatch_statusupdate(void);
 
+/* Step 7C-4: same snapshot as hasp_dispatch_statusupdate() but returned to
+ * the caller instead of published to MQTT. Used by GET /info in the Web UI.
+ * `buf` receives a null-terminated JSON string. Returns the number of bytes
+ * written (excluding the terminator), or 0 on overflow. Caller must hold
+ * the LVGL lock (reads lv_display_get_default). */
+size_t hasp_dispatch_build_statusupdate_json(char* buf, size_t buf_size);
+
 /* Step 7D-1: sensordata telemetry — S3 hasp_dispatch.cpp:1341
  * dispatch_send_sensordata. Emits time/uptimeSec/uptime (S3-shape; sensor
  * fields intentionally omitted until a HAL sensor bus is ported) to

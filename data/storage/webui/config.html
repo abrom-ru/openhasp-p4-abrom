@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Настройки — openHASP</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav><a href="/">← Главная</a></nav>
+  <h1>Настройки</h1>
+
+  <div class="row" style="flex-direction:column">
+    <a class="button" href="/config/wifi">Wi-Fi</a>
+    <a class="button" href="/config/mqtt">MQTT</a>
+    <a class="button" href="/config/hasp">HASP (тема, стартовая страница)</a>
+    <a class="button" href="/config/http">HTTP (доступ)</a>
+  </div>
+
+  <h2>Полный JSON</h2>
+  <pre id="dump">Загрузка…</pre>
+
+<script>
+"use strict";
+
+fetch("/api/config", { credentials: "same-origin" })
+  .then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))
+  .then(j => {
+    document.getElementById("dump").textContent = JSON.stringify(j, null, 2);
+  })
+  .catch(e => {
+    document.getElementById("dump").textContent = "Ошибка: " + e.message;
+  });
+</script>
+</body>
+</html>

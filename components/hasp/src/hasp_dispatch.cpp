@@ -118,11 +118,10 @@ void dispatch_state_subtopic(const char* subtopic, const char* payload)
  *
  * Topic: hasp/<host>/state/statusupdate  (via dispatch_state_subtopic).
  */
-void hasp_dispatch_statusupdate(void)
+size_t hasp_dispatch_build_statusupdate_json(char* buf, size_t buf_size)
 {
-    /* Gather network + system state on stack. All calls are cheap and safe
-     * off-lock, but we're already under the LVGL lock (called from the 1s
-     * timer or a command dispatch). */
+    if (!buf || buf_size == 0) return 0;
+
     esp_netif_t* sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
 
     const char* hostname = "";
@@ -177,13 +176,21 @@ void hasp_dispatch_statusupdate(void)
     doc["tftWidth"]  = tft_w;
     doc["tftHeight"] = tft_h;
 
-    char buf[400];
-    size_t n = serializeJson(doc, buf, sizeof(buf));
-    if (n == 0 || n >= sizeof(buf)) {
+    size_t n = serializeJson(doc, buf, buf_size);
+    if (n == 0 || n >= buf_size) {
         ESP_LOGW(TAG, "statusupdate: JSON overflow (n=%u)", (unsigned)n);
-        return;
+        if (buf_size > 0) buf[0] = '\0';
+        return 0;
     }
+    return n;
+}
 
+/* MQTT-publishing form. Wraps hasp_dispatch_build_statusupdate_json + push. */
+void hasp_dispatch_statusupdate(void)
+{
+    char buf[400];
+    size_t n = hasp_dispatch_build_statusupdate_json(buf, sizeof(buf));
+    if (n == 0) return;
     dispatch_state_subtopic("statusupdate", buf);
 }
 

@@ -5,13 +5,7 @@
 #include "hasp_service_manager.hpp"
 #include "esp_http_server.h"
 
-static constexpr size_t SESSION_TOKEN_LEN = 32;
-struct Session
-{
-    bool active;
-    uint8_t token[SESSION_TOKEN_LEN];
-    uint32_t last_activity;
-};
+#include <string>
 
 class HaspHttp : public HaspService
 {
@@ -33,9 +27,11 @@ public:
     const char *name() const override { return "http"; }
     bool isRunning() const override;
 
-    // For now we keep http config empty / unused
-    esp_err_t get_config(JsonObject obj) const override { return ESP_OK; }
-    esp_err_t set_config(JsonObjectConst obj) override { return ESP_OK; }
+    // Step 7C-1: config carries Basic-Auth credentials (S3-mirror httpUser /
+    // httpPassword) and the listen port. Password is masked in get_config the
+    // same way wifi/mqtt do it — real value only in NVS.
+    esp_err_t get_config(JsonObject obj) const override;
+    esp_err_t set_config(JsonObjectConst obj) override;
 
 protected:
     esp_err_t start_backend() override;
@@ -48,25 +44,35 @@ private:
     ServiceManager &mgr_;
     httpd_handle_t server_ = nullptr;
 
+    // Step 7C-1: runtime config (S3-mirror hasp_http_config_t)
+    std::string user_;
+    std::string password_;
+    uint16_t port_ = 80;
+
+    esp_err_t load_from_nvs();
+
     static void hasp_event_handler(
         void *arg,
         esp_event_base_t base,
         int32_t id,
         void *event_data);
 
-    static esp_err_t create_session(httpd_req_t *req);
-    static void clear_session(Session &session);
-    static esp_err_t authenticate_request(httpd_req_t *req);
+    // Step 7C-1: HTTP Basic Auth (mirrors S3 httpIsAuthenticated). When
+    // password is empty the server is fully open — matches S3 default.
+    esp_err_t check_basic_auth(httpd_req_t *req) const;
     static esp_err_t require_auth(httpd_req_t *req);
 
+    // --- URI handlers ---
     static esp_err_t config_get_handler(httpd_req_t *req);
     static esp_err_t config_post_handler(httpd_req_t *req);
     static esp_err_t console_get_handler(httpd_req_t *req);
+    static esp_err_t static_get_handler(httpd_req_t *req);
+    static esp_err_t info_get_handler(httpd_req_t *req);
+    static esp_err_t reboot_post_handler(httpd_req_t *req);
 
     static esp_err_t ws_handler(httpd_req_t *req);
-    static esp_err_t ws_auth_handler(httpd_req_t *req);
 
-    // Helper to get the HaspHttp instance from the request
+    // Helper: pull HaspHttp* back out of user_ctx
     static HaspHttp *from_req(httpd_req_t *req)
     {
         return static_cast<HaspHttp *>(req->user_ctx);

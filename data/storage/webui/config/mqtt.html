@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MQTT — openHASP</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav><a href="/config">← Настройки</a></nav>
+  <h1>MQTT</h1>
+
+  <form id="f">
+    <div>
+      <label for="host">Брокер (host)</label>
+      <input id="host" name="host" type="text" required maxlength="63">
+    </div>
+    <div>
+      <label for="port">Порт</label>
+      <input id="port" name="port" type="number" min="1" max="65535" required>
+    </div>
+    <div>
+      <label for="client_id">Client ID</label>
+      <input id="client_id" name="client_id" type="text" maxlength="31">
+    </div>
+    <div>
+      <label for="user">Пользователь</label>
+      <input id="user" name="user" type="text" maxlength="31">
+    </div>
+    <div>
+      <label for="password">Пароль</label>
+      <input id="password" name="password" type="password" maxlength="63" placeholder="••••••">
+    </div>
+    <div>
+      <label for="group">Группа (для подписки)</label>
+      <input id="group" name="group" type="text" maxlength="31">
+    </div>
+    <div>
+      <label for="teleperiod">Teleperiod (сек)</label>
+      <input id="teleperiod" name="teleperiod" type="number" min="0" max="86400">
+    </div>
+    <div class="row">
+      <button type="submit">Сохранить</button>
+      <a class="button" href="/config">Отмена</a>
+    </div>
+    <div id="status"></div>
+  </form>
+
+<script src="/config/form.js"></script>
+<script>bindConfigForm(
+  "mqtt",
+  ["host", "port", "client_id", "user", "password", "group", "teleperiod"],
+  { port: "int", teleperiod: "int" }
+);</script>
+</body>
+</html>
