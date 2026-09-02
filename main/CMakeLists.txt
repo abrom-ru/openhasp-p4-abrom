@@ -7,6 +7,7 @@ idf_component_register(
         esp_mm
         gen_bmgr_codes
         hasp
+        hasp_config
         hasp_fs
         hasp_ftp
         hasp_http

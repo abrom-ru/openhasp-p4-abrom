@@ -1,4 +1,5 @@
 #include "hasp_http.hpp"
+#include "hasp_config.hpp"
 #include "esp_log.h"
 #include "esp_random.h"
 
@@ -352,6 +353,11 @@ esp_err_t HaspHttp::config_post_handler(httpd_req_t *req)
     // Apply to the services that are present in the payload
     self->mgr_.set_config(obj);
     // later: mqtt, etc.
+
+    // Step 6 (S3-mirror configWrite): persist to /littlefs/config.json so
+    // config survives an NVS erase. Passwords are masked by get_config;
+    // real values remain in NVS.
+    hasp_config_save(self->mgr_);
 
     // Return the new full config
     JsonDocument out;

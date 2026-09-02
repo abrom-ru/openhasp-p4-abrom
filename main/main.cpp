@@ -24,6 +24,7 @@
 #include "hasp_dispatch.h"
 #include "hasp_object.h" // 3f smoke: hasp_find_obj_from_page_id
 #include "hasp_font.h"   // 3h-2 stage 3 smoke: get_font() FreeType path
+#include "hasp_config.hpp"
 #include "hasp_fs.hpp"
 #include "hasp_ftp.hpp"
 #include "hasp_http.hpp"
@@ -458,24 +459,13 @@ extern "C" void app_main()
     mgr.add(&mqtt);
     mgr.add(&ftp);
 
-    // Step 4a bring-up: hardcoded creds pushed into NVS so we don't
-    // depend on residual keys from previous flashes. Safe to leave in
-    // for now — set_config only writes to NVS when the value changed.
-    {
-        JsonDocument doc;
-        doc["wifi"]["ssid"]     = "Monthouse75";
-        doc["wifi"]["password"] = "Monthouse13102024";
-        doc["wifi"]["hostname"] = "openhasp-plate";
-        mgr.set_config(doc.as<JsonObject>());
-    }
-
-    {
-        JsonDocument doc;
-        doc["mqtt"]["host"]      = "192.168.1.105";
-        doc["mqtt"]["port"]      = 1883;
-        doc["mqtt"]["client_id"] = "plate";
-        mgr.set_config(doc.as<JsonObject>());
-    }
+    // Step 6 (S3-mirror): bootstrap from /littlefs/config.json instead of
+    // hardcoding creds. First boot: factory config.json seeds NVS via each
+    // service's set_config. After the Web UI rewrites the file, passwords on
+    // flash are masked ("******"); real values live in NVS and are restored
+    // by load_from_nvs on start. Missing file = warn+continue (services will
+    // ESP_ERR_INVALID_STATE from load_from_nvs if NVS is also empty).
+    hasp_config_load(mgr);
 
     gpio_dump_io_configuration(stdout,
                            (1ULL << 41) | (1ULL << 42));

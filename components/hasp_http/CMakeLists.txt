@@ -9,6 +9,7 @@ idf_component_register(
     PRIV_REQUIRES
             bblanchon__arduinojson
             esp_hw_support
+            hasp_config
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE

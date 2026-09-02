@@ -1,0 +1,12 @@
+{
+  "wifi": {
+    "ssid": "Monthouse75",
+    "password": "Monthouse13102024",
+    "hostname": "openhasp-plate"
+  },
+  "mqtt": {
+    "host": "192.168.1.105",
+    "port": 1883,
+    "client_id": "plate"
+  }
+}
