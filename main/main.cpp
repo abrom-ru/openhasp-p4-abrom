@@ -438,31 +438,30 @@ extern "C" void app_main()
         }
     }
 
-#if !CONFIG_IDF_TARGET_ESP32P4
-    // Registration order = start order
+    // Registration order = start order.
+    // Under P4 the WiFi stack goes through esp_wifi_remote → esp-hosted → C6.
     mgr.add(&wifi);
     mgr.add(&http);
     mgr.add(&mqtt);
     mgr.add(&ftp);
-#endif
 
-    // First-time credentials (comment out after first run)
+    // Step 4a bring-up: hardcoded creds pushed into NVS so we don't
+    // depend on residual keys from previous flashes. Safe to leave in
+    // for now — set_config only writes to NVS when the value changed.
     {
         JsonDocument doc;
-        doc["wifi"]["ssid"] = "YOUR_SSID";
-        doc["wifi"]["password"] = "YOUR_PASSWORD";
-        doc["wifi"]["hostname"] = "openhasp";
-        // mgr.set_config(doc.as<JsonObject>());
+        doc["wifi"]["ssid"]     = "Monthouse75";
+        doc["wifi"]["password"] = "Monthouse13102024";
+        doc["wifi"]["hostname"] = "openhasp-plate";
+        mgr.set_config(doc.as<JsonObject>());
     }
 
     {
         JsonDocument doc;
-        doc["mqtt"]["host"] = "homeassistant.local";
-        doc["mqtt"]["port"] = 1883;
-        doc["mqtt"]["user"] = "YOUR_USERNAME";
-        doc["mqtt"]["password"] = "YOUR_PASSWORD";
-        doc["mqtt"]["client_id"] = "plate01-mvp";
-        // mgr.set_config(doc.as<JsonObject>());
+        doc["mqtt"]["host"]      = "192.168.1.105";
+        doc["mqtt"]["port"]      = 1883;
+        doc["mqtt"]["client_id"] = "plate";
+        mgr.set_config(doc.as<JsonObject>());
     }
 
     gpio_dump_io_configuration(stdout,
@@ -540,20 +539,14 @@ extern "C" void app_main()
     // ESP_LOGI("main", "Screen should now be CYAN with backlight on");
 
 
-#if !CONFIG_IDF_TARGET_ESP32P4
-    mgr.startAll(); // wifi first, then http
+    // Step 4a: bring up services (wifi → http → mqtt → ftp in registration order).
+    // On P4 the wifi stack routes through esp_wifi_remote/esp-hosted to C6.
+    mgr.startAll();
 
-    // From here the LVGL task runs; app_main can return or do other work
-
-    // Wait until we have an IP (simple polling for MVP)
+    // Wait until we have an IP (simple polling for MVP).
     while (!wifi.isConnected())
     {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
     ESP_LOGI(TAG, "IP: %s", wifi.getIp().c_str());
-#else
-    // P4 bring-up: step 2 (Wi-Fi via esp-hosted + C6) verified separately.
-    // Step 3 = wire HASP services (mgr.startAll) same as S3 branch above.
-    ESP_LOGI(TAG, "P4 bring-up: HASP services wiring pending (step 3)");
-#endif
 }

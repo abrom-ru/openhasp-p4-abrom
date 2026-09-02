@@ -5,4 +5,6 @@ idf_component_register(
              mqtt
              nvs_flash
     PRIV_REQUIRES bblanchon__arduinojson
+                  esp_netif
+                  esp_wifi
 )

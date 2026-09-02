@@ -1,9 +1,20 @@
 #include "hasp_mqtt.hpp"
 #include "hasp_event.hpp"
 #include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_wifi.h"
 #include <cstring>
+#include <cstdio>
 
 static const char* TAG = "HASP_MQTT";
+
+// S3 topic layout: hasp/<hostname>/{LWT,state/pXbY,command,...}.
+// Prefix + subtopics are constants; hostname is discovered at start_backend
+// from the netif that HaspWifi configured.
+static constexpr const char* MQTT_PREFIX      = "hasp";
+static constexpr const char* MQTT_TOPIC_LWT   = "LWT";
+static constexpr const char* MQTT_LWT_ONLINE  = "online";
+static constexpr const char* MQTT_LWT_OFFLINE = "offline";
 
 HaspMqtt::~HaspMqtt()
 {
@@ -103,6 +114,39 @@ esp_err_t HaspMqtt::start_backend()
         return ESP_ERR_INVALID_STATE;
     }
 
+    // ------------------------------------------------------------------
+    // Build hostname-derived strings (S3 hasp_mqtt_esp.cpp::mqttStart).
+    // The netif hostname was set by HaspWifi::start_backend before us.
+    // ------------------------------------------------------------------
+    const char* netif_hostname = nullptr;
+    esp_netif_t* sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (sta) {
+        esp_netif_get_hostname(sta, &netif_hostname);
+    }
+    std::string hostname;
+    if (netif_hostname && *netif_hostname) {
+        hostname = netif_hostname;
+    } else if (!client_id_.empty()) {
+        hostname = client_id_;       // config fallback
+    } else {
+        hostname = "plate";          // final fallback (must never leak in prod)
+    }
+
+    // "<hostname>_<last3bytes_mac>" — S3 uses last 3 MAC bytes as a stable
+    // per-device suffix so multiple plates on one broker don't collide.
+    uint8_t mac[6] = {};
+    esp_wifi_get_mac(WIFI_IF_STA, mac);
+    char mac_suffix[8];
+    snprintf(mac_suffix, sizeof(mac_suffix), "%02x%02x%02x",
+             mac[3], mac[4], mac[5]);
+    full_client_id_ = hostname + "_" + mac_suffix;
+
+    // "hasp/<hostname>/LWT"
+    lwt_topic_ = std::string(MQTT_PREFIX) + "/" + hostname + "/" + MQTT_TOPIC_LWT;
+
+    ESP_LOGI(TAG, "client_id=%s  lwt=%s",
+             full_client_id_.c_str(), lwt_topic_.c_str());
+
     esp_mqtt_client_config_t cfg = {};
     cfg.broker.address.uri = nullptr;  // use hostname + port
     cfg.broker.address.transport = MQTT_TRANSPORT_OVER_TCP;
@@ -111,11 +155,23 @@ esp_err_t HaspMqtt::start_backend()
     cfg.credentials.username = user_.empty() ? nullptr : user_.c_str();
     cfg.credentials.authentication.password =
         password_.empty() ? nullptr : password_.c_str();
-    cfg.credentials.client_id =
-        client_id_.empty() ? nullptr : client_id_.c_str();
+    cfg.credentials.client_id = full_client_id_.c_str();
 
-    // Simple URI build if you prefer one field later:
-    // cfg.broker.address.uri = "mqtt://host:1883";
+    // LWT: broker publishes hasp/<hostname>/LWT="offline" retained when we
+    // drop. On (re)connect we publish "online" ourselves (see
+    // on_mqtt_connected). qos=1 matches S3 (guarantees LWT delivery).
+    cfg.session.last_will.topic  = lwt_topic_.c_str();
+    cfg.session.last_will.msg    = MQTT_LWT_OFFLINE;
+    cfg.session.last_will.qos    = 1;
+    cfg.session.last_will.retain = 1;
+
+    // S3 tuning (see mqttStart in hasp_mqtt_esp.cpp).
+    cfg.session.disable_clean_session = true;   // keep subs across reconnect
+    cfg.session.keepalive             = 15;     // seconds; default 120 is too long
+    cfg.network.reconnect_timeout_ms  = 5000;
+    cfg.buffer.size                   = 2048;   // room for HA discovery payloads
+    cfg.buffer.out_size               = 512;    // matches S3 out_buffer_size
+    cfg.task.priority                 = 1;
 
     client_ = esp_mqtt_client_init(&cfg);
     if (!client_) return ESP_ERR_NO_MEM;
@@ -266,8 +322,11 @@ void HaspMqtt::on_mqtt_connected()
     connected_ = true;
     ESP_LOGI(TAG, "MQTT connected");
 
-    // MVP heartbeat
-    publish("hasp/status", "online", 0, true);
+    // Retained "online" cancels the retained LWT for external consumers.
+    // qos=1 mirrors LWT so external subscribers see the toggle reliably.
+    if (!lwt_topic_.empty()) {
+        publish(lwt_topic_.c_str(), MQTT_LWT_ONLINE, 1, true);
+    }
 }
 
 void HaspMqtt::on_mqtt_disconnected()

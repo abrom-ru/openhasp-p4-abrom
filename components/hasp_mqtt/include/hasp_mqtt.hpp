@@ -49,6 +49,11 @@ private:
     std::string password_;
     std::string client_id_;
 
+    // Runtime-built at start_backend (must outlive the mqtt client because
+    // esp-mqtt stores raw pointers into these strings via c_str()).
+    std::string full_client_id_;  // "<hostname>_<mac3>", S3-compat
+    std::string lwt_topic_;       // "hasp/<hostname>/LWT"
+
     esp_event_handler_instance_t hasp_conn_inst_ = nullptr;
     esp_event_handler_instance_t hasp_disc_inst_ = nullptr;
 
