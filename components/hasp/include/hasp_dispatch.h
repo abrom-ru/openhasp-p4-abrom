@@ -7,8 +7,8 @@
  *   - p<page>b<id>.<attr>=<value>
  *   - {...} jsonl / [...] json array
  * Deferred (marked in the plan doc): MQTT topic prefixes, config, moodlight,
- * screenshot, statusupdate, sensors, reboot, factory_reset, calibrate, sleep,
- * antiburn, wakeup, run_script, fs, shell_execute, theme, service, discovery.
+ * screenshot, reboot, factory_reset, calibrate, sleep, antiburn, wakeup,
+ * run_script, fs, shell_execute, service, discovery.
  */
 
 #ifndef HASP_DISPATCH_H
@@ -48,6 +48,14 @@ void dispatch_state_subtopic(const char* subtopic, const char* payload);
  * dispatch_state_subtopic(). Safe to call any time (no-op if MQTT down).
  * Caller must hold the LVGL lock (reads lv_display_get_default). */
 void hasp_dispatch_statusupdate(void);
+
+/* Step 7D-1: sensordata telemetry — S3 hasp_dispatch.cpp:1341
+ * dispatch_send_sensordata. Emits time/uptimeSec/uptime (S3-shape; sensor
+ * fields intentionally omitted until a HAL sensor bus is ported) to
+ * "hasp/<host>/state/sensors" via dispatch_state_subtopic(). Safe to call
+ * any time (no-op if MQTT down). Ticks from hasp_every_second on the same
+ * teleperiod cadence as statusupdate. */
+void hasp_dispatch_send_sensordata(void);
 
 /* Step 7B: 1-second tick (S3 hasp_dispatch.cpp:1761 dispatchEverySecond).
  * Decrements the teleperiod counter; when it hits 0 AND MQTT is connected,

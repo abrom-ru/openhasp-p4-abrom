@@ -32,6 +32,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <time.h>           // step 7D-1: strftime for sensors 'time' field
 
 #include <ArduinoJson.h>
 #include "esp_log.h"
@@ -51,16 +52,23 @@ static const char* TAG = "hasp_disp";
  * called by MQTT config; hasp_every_second() consumes both. */
 static uint16_t s_teleperiod_s               = 300;
 static uint16_t s_seconds_to_next_teleperiod = 0;
+/* Step 7D-1: sensordata counter. S3 uses a separate
+ * dispatchSecondsToNextSensordata (hasp_dispatch.cpp:1339) that decrements
+ * in parallel with the teleperiod counter and resets to the same value on
+ * publish. Kept as its own file-local so future 7D-2 (discovery) can add a
+ * third counter the same way without a struct refactor. */
+static uint16_t s_seconds_to_next_sensordata = 0;
 
 void hasp_dispatch_set_teleperiod(uint16_t seconds)
 {
     /* 0 disables periodic publish entirely, matching S3 behavior where
      * `teleperiod > 0` gates every branch of dispatchEverySecond(). */
     s_teleperiod_s = seconds;
-    /* Reset the tick counter so a config change takes effect immediately —
+    /* Reset every tick counter so a config change takes effect immediately —
      * next hasp_every_second() reloads from the new value on the following
      * publish rather than waiting out the old countdown. */
     s_seconds_to_next_teleperiod = seconds;
+    s_seconds_to_next_sensordata = seconds;
     ESP_LOGI(TAG, "teleperiod set to %u s", (unsigned)seconds);
 }
 
@@ -179,26 +187,112 @@ void hasp_dispatch_statusupdate(void)
     dispatch_state_subtopic("statusupdate", buf);
 }
 
-/* S3 hasp_dispatch.cpp:1761 dispatchEverySecond. We only implement the
- * teleperiod slice (sensor/discovery timers land in later steps). Gated on
- * MQTT connection to avoid a torrent of "dropped" log lines while Wi-Fi is
- * still coming up. */
+/* ==================== step 7D-1: sensordata ==================== */
+/* S3 hasp_dispatch.cpp:1341 dispatch_send_sensordata.
+ *
+ * S3 payload:
+ *   time      — strftime("%FT%T", localtime(&raw))     (unconditional; before
+ *                                                       SNTP sync it emits a
+ *                                                       1970 timestamp — same
+ *                                                       here, kept for shape
+ *                                                       parity)
+ *   uptimeSec — haspDevice.get_uptime()                (esp_timer on P4)
+ *   uptime    — "%dT%02d:%02d:%02d" formatted          (identical formatter)
+ *   <sensors> — haspDevice.get_sensors(doc)            (LM75/SHT31 etc — no
+ *                                                       hardware sensor bus
+ *                                                       ported to p4-abrom
+ *                                                       yet, so this stays
+ *                                                       empty; adding it
+ *                                                       later is a matter of
+ *                                                       plugging get_sensors()
+ *                                                       here and NOT changing
+ *                                                       the topic)
+ *   <custom>  — custom_get_sensors(doc) if HASP_USE_CUSTOM (not ported)
+ *
+ * Topic: hasp/<host>/state/sensors  (S3 mqtt_send_state(MQTT_TOPIC_SENSORS)
+ * → same state/ prefix as statusupdate, so we reuse dispatch_state_subtopic
+ * without adding a new mqtt path — that's what makes 7D-1 the "easy half"
+ * of 7D; discovery in 7D-2 needs the separate hasp/discovery/<hwid> path).
+ *
+ * Reset cadence: `= teleperiod` (S3 line 1399 — identical to statusupdate,
+ * not the *2+random used for discovery).
+ */
+void hasp_dispatch_send_sensordata(void)
+{
+    JsonDocument doc;
+
+    /* Time — S3 unconditional strftime. Before SNTP sync (p4-abrom does not
+     * start SNTP yet) time() returns 0, so `time` will read "1970-01-01T00…"
+     * — cosmetic only; drop-in SNTP later fixes it without touching this
+     * code or the topic contract. */
+    time_t rawtime = 0;
+    time(&rawtime);
+    char timebuf[32];
+    struct tm timeinfo;
+    localtime_r(&rawtime, &timeinfo);
+    strftime(timebuf, sizeof(timebuf), "%FT%T", &timeinfo);
+    doc["time"] = timebuf;
+
+    uint64_t uptime_s = esp_timer_get_time() / 1000000ULL;
+    doc["uptimeSec"]  = (uint32_t)uptime_s;
+
+    /* Same formatter as S3 (line 1364) so downstream consumers that parse
+     * "<days>T<hh>:<mm>:<ss>" keep working. */
+    uint32_t secs  = (uint32_t)(uptime_s % 60);
+    uint32_t mins  = (uint32_t)(uptime_s / 60);
+    uint32_t hours = mins / 60;
+    uint32_t days  = hours / 24;
+    mins  = mins  % 60;
+    hours = hours % 24;
+    char upbuf[24];
+    snprintf(upbuf, sizeof(upbuf), "%uT%02u:%02u:%02u",
+             (unsigned)days, (unsigned)hours, (unsigned)mins, (unsigned)secs);
+    doc["uptime"] = upbuf;
+
+    /* No haspDevice.get_sensors() equivalent on p4-abrom yet — the plate has
+     * no ADCs/i2c sensors wired via the HASP HAL. Field intentionally omitted
+     * rather than emitting an empty object, matching how S3 behaves on boards
+     * with no HASP_USE_SENSORS at build time. */
+
+    char buf[256];
+    size_t n = serializeJson(doc, buf, sizeof(buf));
+    if (n == 0 || n >= sizeof(buf)) {
+        ESP_LOGW(TAG, "sensors: JSON overflow (n=%u)", (unsigned)n);
+        return;
+    }
+
+    dispatch_state_subtopic("sensors", buf);
+}
+
+/* S3 hasp_dispatch.cpp:1761 dispatchEverySecond. Two teleperiod-driven
+ * publishes so far (statusupdate + sensors); discovery lands in 7D-2 with
+ * its own *2+random cadence. Both branches share the same MQTT-connected
+ * gate — while offline we hold each counter at 1 so the first tick after
+ * reconnect fires immediately (mirrors S3 mqttIsConnected() short-circuit
+ * inside the else branch). */
 void hasp_every_second(void)
 {
     if (s_teleperiod_s == 0) return;                       // disabled
+
+    /* --- statusupdate (step 7B) --- */
     if (s_seconds_to_next_teleperiod > 1) {
         s_seconds_to_next_teleperiod--;
-        return;
-    }
-    if (!hasp_mqtt_is_connected()) {
-        /* Hold the countdown at 1 while offline — first tick after reconnect
-         * fires immediately, matching S3 semantics (mqttIsConnected inside
-         * the else branch just skips the publish, counter stays low). */
+    } else if (!hasp_mqtt_is_connected()) {
         s_seconds_to_next_teleperiod = 1;
-        return;
+    } else {
+        hasp_dispatch_statusupdate();
+        s_seconds_to_next_teleperiod = s_teleperiod_s;
     }
-    hasp_dispatch_statusupdate();
-    s_seconds_to_next_teleperiod = s_teleperiod_s;
+
+    /* --- sensordata (step 7D-1) --- */
+    if (s_seconds_to_next_sensordata > 1) {
+        s_seconds_to_next_sensordata--;
+    } else if (!hasp_mqtt_is_connected()) {
+        s_seconds_to_next_sensordata = 1;
+    } else {
+        hasp_dispatch_send_sensordata();
+        s_seconds_to_next_sensordata = s_teleperiod_s;
+    }
 }
 
 /* ==================== helpers ==================== */
@@ -406,6 +500,14 @@ void hasp_dispatch_command(const char* line)
     if (!strcasecmp(topic, "statusupdate")) {
         hasp_dispatch_statusupdate();
         s_seconds_to_next_teleperiod = s_teleperiod_s;
+        return;
+    }
+    /* Step 7D-1: S3 line 1708 dispatch_add_command("sensors", …). Forces an
+     * immediate publish and rearms the periodic counter so we don't emit
+     * twice on the next tick. */
+    if (!strcasecmp(topic, "sensors")) {
+        hasp_dispatch_send_sensordata();
+        s_seconds_to_next_sensordata = s_teleperiod_s;
         return;
     }
 
