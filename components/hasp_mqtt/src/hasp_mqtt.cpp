@@ -8,6 +8,12 @@
 
 static const char* TAG = "HASP_MQTT";
 
+// Singleton pointer for the C-callable state publisher (step 4b).
+// Set in start_backend after topics are built; cleared in stop_backend.
+// hasp component publishes via hasp_mqtt_publish_state() without knowing
+// anything about ServiceManager or HaspMqtt storage layout.
+static HaspMqtt* s_instance = nullptr;
+
 // S3 topic layout: hasp/<hostname>/{LWT,state/pXbY,command,...}.
 // Prefix + subtopics are constants; hostname is discovered at start_backend
 // from the netif that HaspWifi configured.
@@ -143,9 +149,13 @@ esp_err_t HaspMqtt::start_backend()
 
     // "hasp/<hostname>/LWT"
     lwt_topic_ = std::string(MQTT_PREFIX) + "/" + hostname + "/" + MQTT_TOPIC_LWT;
+    // "hasp/<hostname>/state/" — trailing slash so callers concat subtopic
+    // directly (S3 mqttNodeStateTopic is built the same way with add_slash=true
+    // in mqttParseTopic; see hasp_mqtt_esp.cpp:549).
+    state_prefix_ = std::string(MQTT_PREFIX) + "/" + hostname + "/state/";
 
-    ESP_LOGI(TAG, "client_id=%s  lwt=%s",
-             full_client_id_.c_str(), lwt_topic_.c_str());
+    ESP_LOGI(TAG, "client_id=%s  lwt=%s  state=%s*",
+             full_client_id_.c_str(), lwt_topic_.c_str(), state_prefix_.c_str());
 
     esp_mqtt_client_config_t cfg = {};
     cfg.broker.address.uri = nullptr;  // use hostname + port
@@ -187,12 +197,15 @@ esp_err_t HaspMqtt::start_backend()
     }
 
     started_ = true;
+    s_instance = this; // enable hasp_mqtt_publish_state()
     ESP_LOGI(TAG, "MQTT client starting → %s:%u", host_.c_str(), (unsigned)port_);
     return ESP_OK;
 }
 
 esp_err_t HaspMqtt::stop_backend()
 {
+    if (s_instance == this) s_instance = nullptr;
+
     if (!client_) {
         started_ = false;
         connected_ = false;
@@ -231,6 +244,30 @@ esp_err_t HaspMqtt::publish(const char* topic, const char* data, int qos, bool r
     if (!client_ || !connected_ || !topic || !data) return ESP_ERR_INVALID_STATE;
     int msg_id = esp_mqtt_client_publish(client_, topic, data, 0, qos, retain);
     return (msg_id < 0) ? ESP_FAIL : ESP_OK;
+}
+
+esp_err_t HaspMqtt::publish_state(const char* subtopic, const char* payload)
+{
+    if (!subtopic || !payload) return ESP_ERR_INVALID_ARG;
+    if (state_prefix_.empty()) return ESP_ERR_INVALID_STATE;
+    // Build "hasp/<hostname>/state/<subtopic>" on stack (bounded — hasp
+    // subtopics are pXbY or short pagename.bN, always well under 64 bytes).
+    char topic[128];
+    int n = snprintf(topic, sizeof(topic), "%s%s",
+                     state_prefix_.c_str(), subtopic);
+    if (n <= 0 || n >= (int)sizeof(topic)) return ESP_ERR_INVALID_SIZE;
+    // S3 defaults: qos=0, retain=false (mqtt_send_state signature).
+    return publish(topic, payload, 0, false);
+}
+
+// C-callable free function — accessible from hasp component without pulling
+// in ServiceManager or C++ singleton machinery. No-op when MQTT is not up so
+// callers (event handlers) can fire regardless of connection state.
+extern "C" int hasp_mqtt_publish_state(const char* subtopic, const char* payload)
+{
+    HaspMqtt* self = s_instance;
+    if (!self) return ESP_ERR_INVALID_STATE;
+    return self->publish_state(subtopic, payload);
 }
 
 // ---------------------------------------------------------------------------

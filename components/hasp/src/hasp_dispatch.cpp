@@ -27,6 +27,7 @@
 #include "hasp.hpp"
 #include "hasp_object.h"
 #include "hasp_page.h"
+#include "hasp_mqtt.hpp"   // step 4b: dispatch_state_subtopic → hasp_mqtt_publish_state
 
 #include <string.h>
 #include <stdlib.h>
@@ -36,6 +37,28 @@
 #include "esp_log.h"
 
 static const char* TAG = "hasp_disp";
+
+/* ==================== state subtopic sink (step 4b) ==================== */
+/* Mirrors S3 hasp_dispatch.cpp:64 dispatch_state_subtopic. In S3 this is the
+ * one seam through which every state-side JSON payload leaves the device
+ * (objects, page changes, dim, moodlight, statusupdate, config, sensors...).
+ * Step 4b wires only the MQTT path; step 4c will fan out to group/broadcast. */
+void dispatch_state_subtopic(const char* subtopic, const char* payload)
+{
+    if (!subtopic || !payload) return;
+
+    int rc = hasp_mqtt_publish_state(subtopic, payload);
+    if (rc == ESP_OK) {
+        ESP_LOGD(TAG, "state %s => %s", subtopic, payload);
+    } else if (rc == ESP_ERR_INVALID_STATE) {
+        /* Broker not yet connected (or MQTT never started). S3 logs
+         * "MQTT not connected" at ERROR; we keep it at DEBUG because
+         * pre-connect touches (during app_ui_init) would otherwise spam. */
+        ESP_LOGD(TAG, "mqtt not up, dropped %s => %s", subtopic, payload);
+    } else {
+        ESP_LOGW(TAG, "mqtt publish failed (%d) %s => %s", rc, subtopic, payload);
+    }
+}
 
 /* ==================== helpers ==================== */
 

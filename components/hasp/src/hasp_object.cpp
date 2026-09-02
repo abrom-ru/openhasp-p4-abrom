@@ -17,6 +17,7 @@
 
 #include "hasp_object.h"
 #include "hasp_attribute.h"
+#include "hasp_dispatch.h"   // step 4b: dispatch_state_subtopic()
 #include "hasp_event.h"
 #include "hasp_parser.h"
 #include "hasp_page.h"
@@ -114,13 +115,17 @@ bool hasp_find_id_from_obj(const lv_obj_t* obj, uint8_t* pageid, uint8_t* objid)
     return true;
 }
 
-/* ==================== State dispatch (step 3f) ==============================
+/* ==================== State dispatch (step 3f + 4b) =========================
  * Mirrors src/hasp/hasp_object.cpp:110 object_dispatch_state().
  * S3 builds the state subtopic (pageid.name or "pXbY") then hands the payload
- * to dispatch_state_subtopic → mqtt_send_state. We keep the same topic-shape
- * contract (so 3f handlers already produce MQTT-ready payloads) but log-only
- * for now — the MQTT wiring lands in step 4 where the sink swaps from ESP_LOGI
- * to mqtt_send_state without touching event handlers or attribute getters.
+ * to dispatch_state_subtopic → mqtt_send_state. Step 4b wires the MQTT sink
+ * inside dispatch_state_subtopic; the topic-shape contract established in 3f
+ * needed no changes (handlers already emit MQTT-ready JSON).
+ *
+ * Keeping the ESP_LOGI here at INFO makes the log stream double as a
+ * pre-broker mirror during bring-up; dispatch_state_subtopic drops to DEBUG
+ * when the broker isn't up (see hasp_dispatch.cpp) to avoid duplication in
+ * steady state.
  */
 void object_dispatch_state(uint8_t pageid, uint8_t btnid, const char* payload)
 {
@@ -133,8 +138,8 @@ void object_dispatch_state(uint8_t pageid, uint8_t btnid, const char* payload)
     else
         snprintf(topic, sizeof(topic), "p%ub%u", pageid, btnid); /* HASP_OBJECT_NOTATION */
 
-    /* Step 4 will replace this ESP_LOGI with dispatch_state_subtopic(topic, payload). */
     ESP_LOGI(TAG, "state %s => %s", topic, payload);
+    dispatch_state_subtopic(topic, payload);
 }
 
 /* Mirrors src/hasp/hasp_object.cpp:228 hasp_new_object().

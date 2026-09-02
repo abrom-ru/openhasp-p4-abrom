@@ -14,4 +14,5 @@ idf_component_register(
         bblanchon__arduinojson
         lvgl__lvgl
         hasp_log
+        hasp_mqtt
 )

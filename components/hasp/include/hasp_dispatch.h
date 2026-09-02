@@ -36,6 +36,12 @@ void hasp_dispatch_command(const char* line);
 void hasp_dispatch_page(const char* payload);       /* "2" | "next" | "prev" | "back" | "" */
 void hasp_dispatch_clear_page(const char* payload); /* "N" | "all" | "" */
 
+/* Publish "<subtopic>" state payload to MQTT. Step 4b — mirrors S3
+ * src/hasp/hasp_dispatch.cpp:64 dispatch_state_subtopic(). Currently forwards
+ * to hasp_mqtt_publish_state; when 4c adds group/broadcast this fans out
+ * without touching event handlers or object code. Log-traces on success. */
+void dispatch_state_subtopic(const char* subtopic, const char* payload);
+
 #ifdef __cplusplus
 }
 #endif

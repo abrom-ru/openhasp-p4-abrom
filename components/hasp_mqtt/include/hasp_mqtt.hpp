@@ -33,6 +33,10 @@ public:
     /** Publish UTF-8 payload (no-op if not connected) */
     esp_err_t publish(const char* topic, const char* data, int qos = 0, bool retain = false);
 
+    /** Publish "<state_prefix><subtopic>" = "hasp/<hostname>/state/<subtopic>".
+     *  qos=0, retain=false — mirrors S3 mqtt_send_state defaults. */
+    esp_err_t publish_state(const char* subtopic, const char* payload);
+
     bool isConnected() const { return connected_; }
 
 private:
@@ -53,6 +57,7 @@ private:
     // esp-mqtt stores raw pointers into these strings via c_str()).
     std::string full_client_id_;  // "<hostname>_<mac3>", S3-compat
     std::string lwt_topic_;       // "hasp/<hostname>/LWT"
+    std::string state_prefix_;    // "hasp/<hostname>/state/" (trailing slash, S3-compat)
 
     esp_event_handler_instance_t hasp_conn_inst_ = nullptr;
     esp_event_handler_instance_t hasp_disc_inst_ = nullptr;
@@ -72,3 +77,15 @@ private:
     void on_network_up();
     void on_network_down();
 };
+
+/* C-callable state publisher (step 4b).
+ * Mirrors S3 mqtt_send_state(subtopic, payload, retain=false).
+ * Callable from anywhere (e.g. hasp component's dispatch_state_subtopic).
+ * No-op if no HaspMqtt instance is registered yet or if not connected. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+int hasp_mqtt_publish_state(const char* subtopic, const char* payload);
+#ifdef __cplusplus
+}
+#endif
