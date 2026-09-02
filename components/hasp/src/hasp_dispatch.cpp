@@ -35,8 +35,34 @@
 
 #include <ArduinoJson.h>
 #include "esp_log.h"
+#include "esp_timer.h"      // step 7B: uptime
+#include "esp_heap_caps.h"  // step 7B: free/min heap
+#include "esp_netif.h"      // step 7B: ip lookup for statusupdate
+#include "esp_wifi.h"       // step 7B: rssi/ssid for statusupdate
+#include "esp_idf_version.h"// step 7B: IDF_VER for statusupdate 'version'
+#include "lvgl.h"           // step 7B: tftWidth/Height from active display
 
 static const char* TAG = "hasp_disp";
+
+/* ==================== step 7B: telemetry / teleperiod ==================== */
+/* S3 hasp_dispatch.cpp:51 — dispatch_setings.teleperiod default 300 s.
+ * Kept as file-locals here (dispatch_conf_t was one field only) so we don't
+ * inflate the public header. hasp_dispatch_set_teleperiod() is the setter
+ * called by MQTT config; hasp_every_second() consumes both. */
+static uint16_t s_teleperiod_s               = 300;
+static uint16_t s_seconds_to_next_teleperiod = 0;
+
+void hasp_dispatch_set_teleperiod(uint16_t seconds)
+{
+    /* 0 disables periodic publish entirely, matching S3 behavior where
+     * `teleperiod > 0` gates every branch of dispatchEverySecond(). */
+    s_teleperiod_s = seconds;
+    /* Reset the tick counter so a config change takes effect immediately —
+     * next hasp_every_second() reloads from the new value on the following
+     * publish rather than waiting out the old countdown. */
+    s_seconds_to_next_teleperiod = seconds;
+    ESP_LOGI(TAG, "teleperiod set to %u s", (unsigned)seconds);
+}
 
 /* ==================== state subtopic sink (step 4b) ==================== */
 /* Mirrors S3 hasp_dispatch.cpp:64 dispatch_state_subtopic. In S3 this is the
@@ -58,6 +84,121 @@ void dispatch_state_subtopic(const char* subtopic, const char* payload)
     } else {
         ESP_LOGW(TAG, "mqtt publish failed (%d) %s => %s", rc, subtopic, payload);
     }
+}
+
+/* ==================== step 7B: statusupdate ==================== */
+/* S3 hasp_dispatch.cpp:1473 dispatch_statusupdate.
+ *
+ * Payload adapted to what the p4-abrom stack can actually query today:
+ *   S3 field           | p4-abrom source                | notes
+ *   -------------------+---------------------------------+---------------------
+ *   node               | wifi hostname (netif)          | S3 haspDevice.get_hostname
+ *   version            | IDF_VER + git ver placeholder  | no HASP_VERSION define yet
+ *   uptime             | esp_timer_get_time()/1e6       | S3 millis()/1000
+ *   ip / rssi / ssid   | esp_netif + esp_wifi_sta_get_ap| S3 network_get_statusupdate
+ *   heapFree           | esp_get_free_heap_size()       | S3 haspDevice.get_free_heap
+ *   heapMin            | esp_get_minimum_free_heap_size | replaces S3 heapFrag
+ *                      |                                 | (no equivalent API on IDF)
+ *   page / numPages    | haspPages.get() / HASP_NUM_PAGES| S3 identical
+ *   tftWidth / Height  | lv_display_get_default()       | S3 haspTft.width/height
+ *
+ * S3-only fields intentionally omitted (features not yet ported to p4-abrom):
+ *   - idle    (sleep_state — sleep/antiburn not implemented)
+ *   - core    (Arduino ESP core string — n/a for ESP-IDF)
+ *   - canUpdate (OTA — deferred)
+ *   - tftDriver (JD9165 hardcoded via BSP — no runtime getter)
+ *
+ * Topic: hasp/<host>/state/statusupdate  (via dispatch_state_subtopic).
+ */
+void hasp_dispatch_statusupdate(void)
+{
+    /* Gather network + system state on stack. All calls are cheap and safe
+     * off-lock, but we're already under the LVGL lock (called from the 1s
+     * timer or a command dispatch). */
+    esp_netif_t* sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+
+    const char* hostname = "";
+    if (sta) esp_netif_get_hostname(sta, &hostname);
+    if (!hostname) hostname = "";
+
+    char ip_str[16] = "";
+    if (sta) {
+        esp_netif_ip_info_t info;
+        if (esp_netif_get_ip_info(sta, &info) == ESP_OK) {
+            snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&info.ip));
+        }
+    }
+
+    /* esp_wifi_sta_get_ap_info returns ESP_ERR_WIFI_NOT_CONNECT until associated.
+     * On P4 the call goes through esp_wifi_remote → C6; still returns instantly
+     * (no radio blocking). */
+    wifi_ap_record_t ap = {};
+    int  rssi = 0;
+    const char* ssid = "";
+    if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        rssi = ap.rssi;
+        ssid = (const char*)ap.ssid;
+    }
+
+    uint64_t uptime_s   = esp_timer_get_time() / 1000000ULL;
+    uint32_t heap_free  = (uint32_t)esp_get_free_heap_size();
+    uint32_t heap_min   = (uint32_t)esp_get_minimum_free_heap_size();
+    uint8_t  page_now   = hasp_get_page();
+
+    int32_t tft_w = 0, tft_h = 0;
+    lv_display_t* disp = lv_display_get_default();
+    if (disp) {
+        tft_w = lv_display_get_horizontal_resolution(disp);
+        tft_h = lv_display_get_vertical_resolution(disp);
+    }
+
+    /* S3 uses a 400-byte char buffer + snprintf_P chunks. We stream through
+     * ArduinoJson for readability — payload is well under 400 bytes even with
+     * long SSID/hostname (checked below). */
+    JsonDocument doc;
+    doc["node"]      = hostname;
+    doc["version"]   = "p4-abrom " IDF_VER;
+    doc["uptime"]    = (uint32_t)uptime_s;
+    doc["ip"]        = ip_str;
+    doc["ssid"]      = ssid;
+    doc["rssi"]      = rssi;
+    doc["heapFree"]  = heap_free;
+    doc["heapMin"]   = heap_min;
+    doc["page"]      = page_now;
+    doc["numPages"]  = (uint16_t)HASP_NUM_PAGES;
+    doc["tftWidth"]  = tft_w;
+    doc["tftHeight"] = tft_h;
+
+    char buf[400];
+    size_t n = serializeJson(doc, buf, sizeof(buf));
+    if (n == 0 || n >= sizeof(buf)) {
+        ESP_LOGW(TAG, "statusupdate: JSON overflow (n=%u)", (unsigned)n);
+        return;
+    }
+
+    dispatch_state_subtopic("statusupdate", buf);
+}
+
+/* S3 hasp_dispatch.cpp:1761 dispatchEverySecond. We only implement the
+ * teleperiod slice (sensor/discovery timers land in later steps). Gated on
+ * MQTT connection to avoid a torrent of "dropped" log lines while Wi-Fi is
+ * still coming up. */
+void hasp_every_second(void)
+{
+    if (s_teleperiod_s == 0) return;                       // disabled
+    if (s_seconds_to_next_teleperiod > 1) {
+        s_seconds_to_next_teleperiod--;
+        return;
+    }
+    if (!hasp_mqtt_is_connected()) {
+        /* Hold the countdown at 1 while offline — first tick after reconnect
+         * fires immediately, matching S3 semantics (mqttIsConnected inside
+         * the else branch just skips the publish, counter stays low). */
+        s_seconds_to_next_teleperiod = 1;
+        return;
+    }
+    hasp_dispatch_statusupdate();
+    s_seconds_to_next_teleperiod = s_teleperiod_s;
 }
 
 /* ==================== helpers ==================== */
@@ -255,6 +396,16 @@ void hasp_dispatch_command(const char* line)
     }
     if (!strcasecmp(topic, "json")) {
         dispatch_json_array(payload);
+        return;
+    }
+    /* Step 7B: on-demand telemetry (S3 line 1705
+     * dispatch_add_command("statusupdate", dispatch_statusupdate)). Any
+     * payload is ignored — the command exists purely to force an immediate
+     * publish. Reset the periodic counter so we don't publish twice in a
+     * row on the next tick. */
+    if (!strcasecmp(topic, "statusupdate")) {
+        hasp_dispatch_statusupdate();
+        s_seconds_to_next_teleperiod = s_teleperiod_s;
         return;
     }
 

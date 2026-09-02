@@ -11,6 +11,10 @@
 // circular CMake dep (hasp component already REQUIRES hasp_mqtt for the 4b
 // state-publish path). Symbol resolves at link time via main's REQUIRES hasp.
 extern "C" void hasp_dispatch_command(const char* line);
+// Step 7B: keep the mqtt-owned teleperiod knob in sync with hasp_dispatch's
+// tick counter. Forward-decl mirrors hasp_dispatch_command above (same
+// rationale: avoid a circular CMake dep). Symbol resolves at link time.
+extern "C" void hasp_dispatch_set_teleperiod(uint16_t seconds);
 
 static const char* TAG = "HASP_MQTT";
 
@@ -84,12 +88,15 @@ esp_err_t HaspMqtt::get_config(JsonObject obj) const
     if (!group_.empty()) group = group_;
     else nvs_get_string("group", group);
 
-    mqtt["host"]      = host;
-    mqtt["port"]      = port;
-    mqtt["user"]      = user;
-    mqtt["password"]  = "******";
-    mqtt["client_id"] = client_id;
-    mqtt["group"]     = group;
+    mqtt["host"]       = host;
+    mqtt["port"]       = port;
+    mqtt["user"]       = user;
+    mqtt["password"]   = "******";
+    mqtt["client_id"]  = client_id;
+    mqtt["group"]      = group;
+    // Step 7B: teleperiod_ is populated at load_from_nvs (or the 300 s
+    // default when NVS is empty) — read the live field, not NVS again.
+    mqtt["teleperiod"] = (uint32_t)teleperiod_;
 
     // mode is handled by base later; for MVP you can store it the same way as other services
     return ESP_OK;
@@ -128,6 +135,16 @@ esp_err_t HaspMqtt::set_config(JsonObjectConst obj)
         group_ = mqtt["group"].as<std::string>();
         nvs_set_string("group", group_);
     }
+    // Step 7B: mqtt.teleperiod -> hasp_dispatch tick counter. S3 keeps the
+    // knob in debug.teleperiod; we host it under mqtt for lack of a debug
+    // section. Bounds clamp mirrors S3 (u16), 0 disables periodic publish.
+    if (mqtt["teleperiod"].is<uint32_t>() || mqtt["teleperiod"].is<int>()) {
+        uint32_t tp = mqtt["teleperiod"].as<uint32_t>();
+        if (tp > 65535U) tp = 65535U;
+        teleperiod_ = (uint16_t)tp;
+        nvs_set_u32("teleperiod", tp);
+        hasp_dispatch_set_teleperiod(teleperiod_);
+    }
     return ESP_OK;
 }
 
@@ -140,6 +157,19 @@ esp_err_t HaspMqtt::load_from_nvs()
     nvs_get_string("password", password_);
     nvs_get_string("client_id", client_id_);
     nvs_get_string("group", group_);
+
+    // Step 7B: pick up teleperiod from NVS; keep the 300s default when the
+    // key is absent (fresh flash / factory config didn't specify it). Push
+    // the value into hasp_dispatch unconditionally so the tick counter
+    // matches what get_config would report.
+    {
+        uint32_t tp = teleperiod_;
+        if (nvs_get_u32("teleperiod", tp) == ESP_OK) {
+            if (tp > 65535U) tp = 65535U;
+            teleperiod_ = (uint16_t)tp;
+        }
+        hasp_dispatch_set_teleperiod(teleperiod_);
+    }
 
     if (host_.empty()) {
         ESP_LOGW(TAG, "No MQTT host configured");
@@ -599,4 +629,13 @@ extern "C" int hasp_mqtt_process_incoming(void)
     HaspMqtt* self = s_instance;
     if (!self) return 0;
     return self->drain_command_queue();
+}
+
+// Step 7B: C-callable gate for the statusupdate ticker. Mirrors S3
+// mqttIsConnected() used inside dispatchEverySecond(). Safe to call from any
+// task (single-word bool read on the singleton instance).
+extern "C" int hasp_mqtt_is_connected(void)
+{
+    HaspMqtt* self = s_instance;
+    return (self && self->isConnected()) ? 1 : 0;
 }

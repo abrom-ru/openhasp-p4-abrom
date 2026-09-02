@@ -17,4 +17,7 @@ idf_component_register(
         hasp_log
         hasp_mqtt
         hasp_service
+        esp_timer    # step 7B: uptime for statusupdate
+        esp_netif    # step 7B: hostname + ip for statusupdate
+        esp_wifi     # step 7B: rssi/ssid for statusupdate
 )

@@ -8,7 +8,8 @@
     "host": "192.168.1.105",
     "port": 1883,
     "client_id": "plate",
-    "group": "plates"
+    "group": "plates",
+    "teleperiod": 300
   },
   "hasp": {
     "theme": 2,

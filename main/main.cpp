@@ -391,6 +391,17 @@ static void app_ui_init()
         }, 100, nullptr);
         (void)mqtt_pump;
 
+        // Step 7B: 1-second ticker feeding hasp_every_second() (S3
+        // dispatchEverySecond). Decrements the teleperiod counter and
+        // publishes hasp/<host>/state/statusupdate every teleperiod seconds
+        // (300 by default, configurable via mqtt.teleperiod NVS key).
+        // Runs on the LVGL task under lock — safe to read display size /
+        // page state. hasp_mqtt_is_connected() gates the actual publish.
+        lv_timer_t* hasp_tick = lv_timer_create([](lv_timer_t* /*t*/) {
+            hasp_every_second();
+        }, 1000, nullptr);
+        (void)hasp_tick;
+
         lv_refr_now(NULL);
         ESP_LOGI(TAG, "app_ui_init: HASP step-3b widgets on pages 1+2, current=%u", hasp_get_page());
 

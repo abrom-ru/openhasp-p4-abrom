@@ -64,6 +64,12 @@ private:
     // of the config (mqttGetConfig FP_CONFIG_GROUP_TOPIC). Empty string means
     // "fall back to compile-time default at start_backend time".
     std::string group_;
+    // Step 7B: periodic statusupdate cadence (seconds). S3 keeps this in the
+    // *debug* section (FP_DEBUG_TELEPERIOD, dispatch_setings.teleperiod=300);
+    // p4-abrom has no debug section yet, so we tuck the same knob under mqtt
+    // where the rest of the telemetry-facing config lives. 0 disables periodic
+    // publish entirely. Applied to hasp_dispatch via hasp_dispatch_set_teleperiod.
+    uint16_t teleperiod_ = 300;
 
     // Runtime-built at start_backend (must outlive the mqtt client because
     // esp-mqtt stores raw pointers into these strings via c_str()).
@@ -132,6 +138,12 @@ int hasp_mqtt_publish_state(const char* subtopic, const char* payload);
  * be called from an lv_timer on the LVGL task (already under the LVGL lock).
  * Returns the number of messages dispatched. No-op if MQTT not started. */
 int hasp_mqtt_process_incoming(void);
+
+/* Step 7B: connection gate for the periodic statusupdate tick (S3
+ * mqttIsConnected()). Returns 1 when the broker session is up, 0 otherwise
+ * (including "MQTT service not registered"). Cheap enough to poll every
+ * second from hasp_every_second(). */
+int hasp_mqtt_is_connected(void);
 #ifdef __cplusplus
 }
 #endif

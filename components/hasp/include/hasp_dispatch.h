@@ -42,6 +42,25 @@ void hasp_dispatch_clear_page(const char* payload); /* "N" | "all" | "" */
  * without touching event handlers or object code. Log-traces on success. */
 void dispatch_state_subtopic(const char* subtopic, const char* payload);
 
+/* Step 7B: statusupdate telemetry — S3 hasp_dispatch.cpp:1473
+ * dispatch_statusupdate. Serializes a JSON snapshot of node/uptime/heap/net/
+ * page state and publishes it to "hasp/<host>/state/statusupdate" via
+ * dispatch_state_subtopic(). Safe to call any time (no-op if MQTT down).
+ * Caller must hold the LVGL lock (reads lv_display_get_default). */
+void hasp_dispatch_statusupdate(void);
+
+/* Step 7B: 1-second tick (S3 hasp_dispatch.cpp:1761 dispatchEverySecond).
+ * Decrements the teleperiod counter; when it hits 0 AND MQTT is connected,
+ * calls hasp_dispatch_statusupdate() and resets the counter to teleperiod.
+ * Meant to be invoked from an lv_timer @ 1000 ms cadence (LVGL lock held).
+ * When teleperiod==0 telemetry is disabled entirely (S3 behavior). */
+void hasp_every_second(void);
+
+/* Step 7B: runtime teleperiod override (S3 dispatch_setings.teleperiod).
+ * Called by HaspMqtt::set_config / load_from_nvs when the mqtt.teleperiod
+ * NVS key is present. 0 disables periodic publish. Default at boot = 300s. */
+void hasp_dispatch_set_teleperiod(uint16_t seconds);
+
 #ifdef __cplusplus
 }
 #endif
