@@ -37,6 +37,11 @@ typedef struct {
     uint8_t objid;      // lv_hasp_obj_type_t
     uint8_t groupid;
     void*   extra;      // widget-specific heap resource (line points, …)
+    /* 7E: label `template` attribute (strftime). Points at a
+     * hasp_template_task_t (see hasp_attribute.cpp). Timer + heap-copied
+     * template string, freed in delete_event_handler. NULL when the label
+     * has no template (default). Only LV_HASP_LABEL touches this. */
+    void*   template_task;
 } hasp_obj_user_data_t;
 
 /* HASP object type ids — copied verbatim from src/hasp/hasp_object.h:41 */

@@ -14,6 +14,7 @@ idf_component_register(
         hasp_log
         hasp_mqtt
         hasp_service
+        hasp_time
         hasp_wifi
         nvs_flash
         bblanchon__arduinojson

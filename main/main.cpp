@@ -32,6 +32,7 @@
 #include "hasp_log.hpp"
 #include "hasp_mqtt.hpp"
 #include "hasp_service_manager.hpp"
+#include "hasp_time.hpp"  // Step 7E: SNTP + POSIX TZ
 #include "hasp_wifi.hpp"
 
 #include "driver/gpio.h"
@@ -76,6 +77,7 @@ static HaspWifi wifi;
 static HaspFtp ftp(mgr);   // only knows the manager
 static HaspHttp http(mgr); // only knows the manager
 static HaspMqtt mqtt(mgr); // only knows the manager
+static HaspTime time_svc;  // Step 7E: SNTP + timezone, KeepAlive
 static HaspModule hasp_module; // Step 7A: hasp section (theme, startpage) — no backend
 
 extern const esp_board_device_desc_t g_esp_board_devices[];
@@ -467,10 +469,13 @@ extern "C" void app_main()
 
     // Registration order = start order.
     // Under P4 the WiFi stack goes through esp_wifi_remote → esp-hosted → C6.
+    ServiceManager::set_default_instance(&mgr);   // Step 7F: dispatch_config needs it
     mgr.add(&wifi);
     mgr.add(&http);
     mgr.add(&mqtt);
     mgr.add(&ftp);
+    // Step 7E: time service — KeepAlive, SNTP init на GOT_IP.
+    mgr.add(&time_svc);
     // Step 7A: hasp module registered BEFORE config load so obj["hasp"] gets
     // routed to HaspModule::set_config (populates haspThemeId/haspStartPage
     // globals before hasp_init consumes them).

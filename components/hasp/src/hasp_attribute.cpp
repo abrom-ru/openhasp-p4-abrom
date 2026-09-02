@@ -52,6 +52,8 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <ctype.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include "esp_log.h"
 
@@ -274,6 +276,89 @@ static hasp_attribute_type_t attribute_common_range(lv_obj_t* obj, int32_t& val,
     return HASP_ATTR_TYPE_INT;
 }
 
+/* ==================== 7E: common: template (S3:1710 my_obj_set_template) ====
+ * S3 stores the template string + interval in a per-object heap struct and
+ * schedules a `lv_task` running event_timer_clock() every 1 s. We do the same
+ * with LVGL 9's `lv_timer_t`. Lifecycle:
+ *   - set_template → stop+free existing task, allocate new struct, create timer
+ *   - delete_event_handler → hasp_template_task_release (frees struct + timer)
+ *   - timer cb → gettimeofday + localtime_r + strftime; skip lv_label_set_text
+ *     when the rendered text hasn't changed (matches S3 event_timer_clock:190).
+ */
+
+typedef struct {
+    lv_obj_t*    obj;
+    char*        templ;
+    lv_timer_t*  timer;
+} hasp_template_task_t;
+
+static void template_timer_cb(lv_timer_t* t)
+{
+    hasp_template_task_t* d = (hasp_template_task_t*)lv_timer_get_user_data(t);
+    if (!d || !d->obj || !d->templ) return;
+
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    time_t sec = tv.tv_sec;
+    struct tm ti;
+    localtime_r(&sec, &ti);
+
+    char buf[128] = {0};
+    strftime(buf, sizeof(buf), d->templ, &ti);
+
+    const char* cur = lv_label_get_text(d->obj);
+    if (cur && strcmp(buf, cur) == 0) return;
+    lv_label_set_text(d->obj, buf);
+}
+
+extern "C" void hasp_template_task_release(void* task)
+{
+    hasp_template_task_t* d = (hasp_template_task_t*)task;
+    if (!d) return;
+    if (d->timer) lv_timer_delete(d->timer);
+    if (d->templ) free(d->templ);
+    free(d);
+}
+
+static hasp_attribute_type_t attribute_common_template(lv_obj_t* obj, const char* payload, bool update)
+{
+    if (obj_get_type(obj) != LV_HASP_LABEL) return HASP_ATTR_TYPE_NOT_FOUND;
+    if (!update) return HASP_ATTR_TYPE_STR;  /* get not supported yet (S3 same). */
+
+    hasp_obj_user_data_t* ud = hasp_obj_ud(obj);
+    if (!ud) return HASP_ATTR_TYPE_NOT_FOUND;
+
+    /* Release any previous template task on this object (S3 my_obj_set_template
+     * calls my_obj_del_task before allocating a new one). */
+    if (ud->template_task) {
+        hasp_template_task_release(ud->template_task);
+        ud->template_task = nullptr;
+    }
+
+    if (!payload || !*payload) {
+        /* Empty payload = clear template. */
+        return HASP_ATTR_TYPE_STR;
+    }
+
+    hasp_template_task_t* d = (hasp_template_task_t*)calloc(1, sizeof(*d));
+    if (!d) return HASP_ATTR_TYPE_NOT_FOUND;
+    d->obj   = obj;
+    d->templ = strdup(payload);
+    if (!d->templ) { free(d); return HASP_ATTR_TYPE_NOT_FOUND; }
+
+    /* S3 interval default is 1000 ms (task_create period). */
+    d->timer = lv_timer_create(template_timer_cb, 1000, d);
+    if (!d->timer) { free(d->templ); free(d); return HASP_ATTR_TYPE_NOT_FOUND; }
+
+    ud->template_task = d;
+
+    /* Render once immediately (S3 my_obj_set_template calls the cb straight
+     * after task_create to avoid a 1 s blank frame). */
+    template_timer_cb(d->timer);
+
+    return HASP_ATTR_TYPE_STR;
+}
+
 /* ==================== common: text (S3:1753) ==================== */
 
 static hasp_attribute_type_t attribute_common_text(lv_obj_t* obj, uint16_t attr_hash,
@@ -284,10 +369,12 @@ static hasp_attribute_type_t attribute_common_text(lv_obj_t* obj, uint16_t attr_
      * types we currently support. */
     switch (obj_get_type(obj)) {
         case LV_HASP_LABEL:
-            if (attr_hash == ATTR_TEXT || attr_hash == ATTR_TXT || attr_hash == ATTR_TEMPLATE) {
+            if (attr_hash == ATTR_TEXT || attr_hash == ATTR_TXT) {
                 if (update) lv_label_set_text(obj, payload);
                 return HASP_ATTR_TYPE_STR;
             }
+            /* ATTR_TEMPLATE is handled by attribute_common_template (S3 splits
+             * these too: my_obj_set_template vs plain text set). */
             break;
         case LV_HASP_CHECKBOX:
             if (attr_hash == ATTR_TEXT || attr_hash == ATTR_TXT) {
@@ -1064,8 +1151,11 @@ void hasp_process_obj_attribute(lv_obj_t* obj, const char* attribute, const char
 
         case ATTR_TXT:
         case ATTR_TEXT:
-        case ATTR_TEMPLATE:
             ret = attribute_common_text(obj, attr_hash, payload, update);
+            break;
+
+        case ATTR_TEMPLATE:
+            ret = attribute_common_template(obj, payload, update);
             break;
 
         case ATTR_ALIGN:

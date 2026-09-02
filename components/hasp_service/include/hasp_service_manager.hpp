@@ -19,6 +19,11 @@ public:
     // Apply config – each service only looks at obj[name()]
     esp_err_t set_config(JsonObjectConst obj);
 
+    // Step 7F: default instance so hasp_dispatch (a different component)
+    // can route MQTT config topics to services without an ad-hoc extern.
+    static ServiceManager* default_instance();
+    static void set_default_instance(ServiceManager* mgr);
+
 private:
     std::vector<HaspService*> services_;
 };

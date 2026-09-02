@@ -27,8 +27,10 @@
 #include "hasp_event.h"
 #include "hasp_object.h"
 #include "hasp_parser.h"
+#include "hasp_attribute.h"   // 7E: hasp_template_task_release
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "esp_log.h"
@@ -104,6 +106,12 @@ void delete_event_handler(lv_event_t* e)
     hasp_obj_user_data_t* ud = hasp_obj_ud(obj);
     if (ud) {
         if (ud->extra) { free(ud->extra); ud->extra = nullptr; }
+        /* 7E: label template attribute (strftime timer). Release before
+         * user_data is freed so the timer callback never sees a dangling obj. */
+        if (ud->template_task) {
+            hasp_template_task_release(ud->template_task);
+            ud->template_task = nullptr;
+        }
         lv_obj_set_user_data(obj, nullptr);
         free(ud);
     }

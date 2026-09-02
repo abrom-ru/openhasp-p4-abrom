@@ -4,6 +4,11 @@
 
 static const char* TAG = "HASP_MGR";
 
+static ServiceManager* s_default_mgr = nullptr;
+
+ServiceManager* ServiceManager::default_instance() { return s_default_mgr; }
+void ServiceManager::set_default_instance(ServiceManager* mgr) { s_default_mgr = mgr; }
+
 void ServiceManager::add(HaspService* svc)
 {
     if (svc) services_.push_back(svc);

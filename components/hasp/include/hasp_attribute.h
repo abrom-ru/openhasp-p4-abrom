@@ -34,6 +34,11 @@ extern "C" {
  */
 void hasp_process_obj_attribute(lv_obj_t* obj, const char* attr_p, const char* payload, bool update);
 
+/* 7E: release a per-object template task (called from delete_event_handler
+ * before user_data is freed). Deletes the lv_timer and frees the heap-copied
+ * template string. Safe to call with NULL. */
+void hasp_template_task_release(void* task);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

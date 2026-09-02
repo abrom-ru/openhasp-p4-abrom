@@ -28,6 +28,7 @@
 #include "hasp_object.h"
 #include "hasp_page.h"
 #include "hasp_mqtt.hpp"   // step 4b: dispatch_state_subtopic → hasp_mqtt_publish_state
+#include "hasp_service_manager.hpp"  // step 7F: route <section>[.<key>] → service
 
 #include <string.h>
 #include <stdlib.h>
@@ -422,6 +423,60 @@ static void dispatch_json_array(const char* payload)
 
 /* ==================== main entry (S3 dispatch_simple_text_command line 382) ==================== */
 
+/* S3 hasp_dispatch.cpp:1461 dispatch_config. Two accepted shapes:
+ *
+ *   topic="<section>"        payload="{...json...}"      whole section replace
+ *   topic="<section>.<key>"  payload="<scalar>"          single-key update
+ *
+ * Section name is matched against ServiceManager registrations
+ * ("wifi", "mqtt", "http", "ftp", "time", "hasp", …). Returns true if the
+ * topic looked like a valid config address (even if the payload was bad
+ * JSON — we still consumed it and don't want the caller to log
+ * "command not found"). */
+static bool dispatch_config(const char* topic, const char* payload)
+{
+    auto* mgr = ServiceManager::default_instance();
+    if (!mgr) return false;
+    if (!topic || !*topic) return false;
+
+    const char* dot = strchr(topic, '.');
+    char section[32];
+    size_t sl = dot ? (size_t)(dot - topic) : strlen(topic);
+    if (sl == 0 || sl >= sizeof(section)) return false;
+    memcpy(section, topic, sl);
+    section[sl] = '\0';
+
+    HaspService* svc = mgr->get(section);
+    if (!svc) return false;   // unknown section → let caller report "not found"
+
+    JsonDocument doc;
+
+    if (dot) {
+        const char* key = dot + 1;
+        if (!*key) return false;
+        /* Scalar assignment. ArduinoJson keeps a pointer to `payload`; the
+         * transient JsonDocument is destroyed before we leave this frame so
+         * the pointer stays valid throughout set_config. */
+        doc[section][key] = payload;
+    } else {
+        JsonDocument body;
+        DeserializationError err = deserializeJson(body, payload ? payload : "");
+        if (err) {
+            ESP_LOGW(TAG, "config '%s': bad JSON: %s", section, err.c_str());
+            return true;
+        }
+        if (!body.is<JsonObject>()) {
+            ESP_LOGW(TAG, "config '%s': payload not an object", section);
+            return true;
+        }
+        doc[section] = body.as<JsonObjectConst>();
+    }
+
+    esp_err_t rc = mgr->set_config(doc.as<JsonObjectConst>());
+    ESP_LOGI(TAG, "config '%s' applied (rc=%d)", section, (int)rc);
+    return true;
+}
+
 void hasp_dispatch_command(const char* line)
 {
     if (!line) return;
@@ -517,6 +572,11 @@ void hasp_dispatch_command(const char* line)
         s_seconds_to_next_sensordata = s_teleperiod_s;
         return;
     }
+
+    /* Step 7F: fall through to config router. S3 dispatch_config (line 1461)
+     * accepts `<section>` (JSON payload) or `<section>.<key>` (scalar).
+     * Returns silently if handled; unknown section → "command not found". */
+    if (dispatch_config(topic, payload)) return;
 
     ESP_LOGW(TAG, "command not found: %s => %s", topic, payload);
 }
