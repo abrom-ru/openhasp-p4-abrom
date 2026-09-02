@@ -375,6 +375,17 @@ static void app_ui_init()
         }, 4000, nullptr);
         (void)t;
 
+        // Step 4c: drain the MQTT downlink command queue on the LVGL task.
+        // esp-mqtt event handler only enqueues (its stack is too small for
+        // heavy commands like `run`); this timer pulls each message and
+        // dispatches it while the LVGL lock is held (lv_timer callbacks are
+        // invoked from lvgl_port task under lock — safe to touch objects).
+        // Period 100 ms mirrors S3 mqttLoop cadence (called from main loop).
+        lv_timer_t* mqtt_pump = lv_timer_create([](lv_timer_t* /*t*/) {
+            hasp_mqtt_process_incoming();
+        }, 100, nullptr);
+        (void)mqtt_pump;
+
         lv_refr_now(NULL);
         ESP_LOGI(TAG, "app_ui_init: HASP step-3b widgets on pages 1+2, current=%u", hasp_get_page());
 

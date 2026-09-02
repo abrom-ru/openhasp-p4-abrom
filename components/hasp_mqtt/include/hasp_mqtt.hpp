@@ -4,6 +4,8 @@
 #include "hasp_service.hpp"
 #include "hasp_service_manager.hpp"
 #include "mqtt_client.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include <string>
 
 class HaspMqtt : public HaspService {
@@ -37,6 +39,11 @@ public:
      *  qos=0, retain=false — mirrors S3 mqtt_send_state defaults. */
     esp_err_t publish_state(const char* subtopic, const char* payload);
 
+    /** Drain the downlink command queue and dispatch each entry through
+     *  hasp_dispatch_command(). Must be called from the LVGL task (holds
+     *  the LVGL lock). Returns number of commands dispatched. */
+    int drain_command_queue();
+
     bool isConnected() const { return connected_; }
 
 private:
@@ -58,6 +65,14 @@ private:
     std::string full_client_id_;  // "<hostname>_<mac3>", S3-compat
     std::string lwt_topic_;       // "hasp/<hostname>/LWT"
     std::string state_prefix_;    // "hasp/<hostname>/state/" (trailing slash, S3-compat)
+    std::string command_prefix_;  // "hasp/<hostname>/command" (no trailing slash, S3-compat)
+
+    // Downlink command queue (step 4c). MQTT_EVENT_DATA runs on the esp-mqtt
+    // task with a ~6KB stack (see S3 comment in mqtt_process_topic_payload) —
+    // dispatching there would overflow on heavy commands like `run`. Enqueue
+    // here, drain from the LVGL task via hasp_mqtt_process_incoming().
+    // Queue persists across reconnects (created once, kept alive until dtor).
+    QueueHandle_t cmd_queue_ = nullptr;
 
     esp_event_handler_instance_t hasp_conn_inst_ = nullptr;
     esp_event_handler_instance_t hasp_disc_inst_ = nullptr;
@@ -65,6 +80,11 @@ private:
     esp_err_t load_from_nvs();
     esp_err_t start_backend();
     esp_err_t stop_backend();
+
+    // Enqueue a received message (called from MQTT_EVENT_DATA). Copies topic
+    // and payload onto the heap; drainer frees them after dispatch.
+    void enqueue_command(const char* topic_after_prefix,
+                         const char* payload, int payload_len);
 
     void register_hasp_handlers();
     void unregister_hasp_handlers();
@@ -86,6 +106,12 @@ private:
 extern "C" {
 #endif
 int hasp_mqtt_publish_state(const char* subtopic, const char* payload);
+
+/* C-callable downlink drainer (step 4c). Pop everything currently in the
+ * command queue and dispatch each via hasp_dispatch_command(). Intended to
+ * be called from an lv_timer on the LVGL task (already under the LVGL lock).
+ * Returns the number of messages dispatched. No-op if MQTT not started. */
+int hasp_mqtt_process_incoming(void);
 #ifdef __cplusplus
 }
 #endif

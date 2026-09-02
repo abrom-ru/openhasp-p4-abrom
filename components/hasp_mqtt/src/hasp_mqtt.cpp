@@ -5,6 +5,12 @@
 #include "esp_wifi.h"
 #include <cstring>
 #include <cstdio>
+#include <cstdlib>
+
+// Step 4c: forward-decl instead of including "hasp_dispatch.h" — avoids a
+// circular CMake dep (hasp component already REQUIRES hasp_mqtt for the 4b
+// state-publish path). Symbol resolves at link time via main's REQUIRES hasp.
+extern "C" void hasp_dispatch_command(const char* line);
 
 static const char* TAG = "HASP_MQTT";
 
@@ -19,8 +25,22 @@ static HaspMqtt* s_instance = nullptr;
 // from the netif that HaspWifi configured.
 static constexpr const char* MQTT_PREFIX      = "hasp";
 static constexpr const char* MQTT_TOPIC_LWT   = "LWT";
+static constexpr const char* MQTT_TOPIC_CMD   = "command";
 static constexpr const char* MQTT_LWT_ONLINE  = "online";
 static constexpr const char* MQTT_LWT_OFFLINE = "offline";
+
+// Step 4c: downlink command queue capacity. S3 uses 64 (mqttSetup:
+// xQueueCreate(64, sizeof(mqtt_message_t))). Same value here so behaviour
+// under bursts (mass jsonl push from HA) is identical.
+static constexpr UBaseType_t CMD_QUEUE_LEN = 64;
+
+// Queued MQTT command (mirrors S3 mqtt_message_t in hasp_mqtt_esp.cpp:33).
+// topic and payload are heap-alloc'd C strings (owned by the message);
+// drainer frees both after dispatch.
+struct mqtt_cmd_msg_t {
+    char* topic;     // subtopic AFTER "hasp/<host>/command" prefix, "" if bare
+    char* payload;   // NUL-terminated payload
+};
 
 HaspMqtt::~HaspMqtt()
 {
@@ -153,9 +173,25 @@ esp_err_t HaspMqtt::start_backend()
     // directly (S3 mqttNodeStateTopic is built the same way with add_slash=true
     // in mqttParseTopic; see hasp_mqtt_esp.cpp:549).
     state_prefix_ = std::string(MQTT_PREFIX) + "/" + hostname + "/state/";
+    // "hasp/<hostname>/command" — NO trailing slash. Subscribe uses
+    // "<prefix>/#" (matches parent + all subs per MQTT spec 4.7).
+    // Strip in MQTT_EVENT_DATA leaves "" (bare command) or "/subtopic".
+    command_prefix_ = std::string(MQTT_PREFIX) + "/" + hostname + "/" + MQTT_TOPIC_CMD;
 
-    ESP_LOGI(TAG, "client_id=%s  lwt=%s  state=%s*",
-             full_client_id_.c_str(), lwt_topic_.c_str(), state_prefix_.c_str());
+    ESP_LOGI(TAG, "client_id=%s  lwt=%s  state=%s*  cmd=%s[/#]",
+             full_client_id_.c_str(), lwt_topic_.c_str(),
+             state_prefix_.c_str(), command_prefix_.c_str());
+
+    // Step 4c: create the downlink queue on first start; keep it alive across
+    // reconnects (S3 mqttSetup creates it once at boot). Draining is idempotent
+    // when the queue is empty, so leaving it live during disconnect is safe.
+    if (!cmd_queue_) {
+        cmd_queue_ = xQueueCreate(CMD_QUEUE_LEN, sizeof(mqtt_cmd_msg_t));
+        if (!cmd_queue_) {
+            ESP_LOGE(TAG, "cmd queue alloc failed");
+            return ESP_ERR_NO_MEM;
+        }
+    }
 
     esp_mqtt_client_config_t cfg = {};
     cfg.broker.address.uri = nullptr;  // use hostname + port
@@ -341,11 +377,35 @@ void HaspMqtt::mqtt_event_handler(void* arg, esp_event_base_t, int32_t id, void*
     case MQTT_EVENT_DISCONNECTED:
         self->on_mqtt_disconnected();
         break;
-    case MQTT_EVENT_DATA:
-        ESP_LOGI(TAG, "MQTT data %.*s = %.*s",
-                 event->topic_len, event->topic,
-                 event->data_len, event->data);
+    case MQTT_EVENT_DATA: {
+        // Step 4c: match against command_prefix_, strip it, enqueue.
+        // esp-mqtt does NOT NUL-terminate event->topic / event->data —
+        // we must respect the lengths explicitly. Fragmentation (payload
+        // > buffer.size = 2048) not handled here; matches S3 which also
+        // treats each MQTT_EVENT_DATA as a full message.
+        const std::string& cp = self->command_prefix_;
+        int tlen = event->topic_len;
+        int clen = (int)cp.size();
+        if (tlen >= clen && cp.size() > 0 &&
+            memcmp(event->topic, cp.data(), clen) == 0 &&
+            (tlen == clen || event->topic[clen] == '/'))
+        {
+            const char* subtopic  = event->topic + clen;
+            int         sub_len   = tlen - clen;
+            // Skip leading '/' so "" == bare command, "page" / "p1b2.text"
+            // for subs (S3 hasp_mqtt_esp.cpp:289 does the same).
+            if (sub_len > 0 && *subtopic == '/') { subtopic++; sub_len--; }
+            char sub_buf[96];
+            if (sub_len >= (int)sizeof(sub_buf)) sub_len = sizeof(sub_buf) - 1;
+            memcpy(sub_buf, subtopic, sub_len);
+            sub_buf[sub_len] = '\0';
+            self->enqueue_command(sub_buf, event->data, event->data_len);
+        } else {
+            ESP_LOGW(TAG, "MQTT unmatched topic %.*s",
+                     event->topic_len, event->topic);
+        }
         break;
+    }
     case MQTT_EVENT_ERROR:
         ESP_LOGW(TAG, "MQTT error");
         break;
@@ -364,10 +424,120 @@ void HaspMqtt::on_mqtt_connected()
     if (!lwt_topic_.empty()) {
         publish(lwt_topic_.c_str(), MQTT_LWT_ONLINE, 1, true);
     }
+
+    // Step 4c: subscribe to node command topic. Wildcard "#" matches parent
+    // too, so a single subscribe covers both "hasp/<host>/command" (bare)
+    // and "hasp/<host>/command/anything" (S3 mqttSubscribeTo pattern in
+    // onMqttConnect / hasp_mqtt_esp.cpp:359). Broker keeps subscription
+    // across reconnects because we set disable_clean_session=true, but the
+    // esp-mqtt client resends SUBSCRIBE on each CONNECT anyway — resub here
+    // is safe (broker returns SUBACK either way).
+    if (!command_prefix_.empty() && client_) {
+        std::string wildcard = command_prefix_ + "/#";
+        int msg_id = esp_mqtt_client_subscribe(client_, wildcard.c_str(), 0);
+        if (msg_id < 0) {
+            ESP_LOGE(TAG, "subscribe failed: %s", wildcard.c_str());
+        } else {
+            ESP_LOGI(TAG, "subscribed: %s (msg_id=%d)", wildcard.c_str(), msg_id);
+        }
+    }
 }
 
 void HaspMqtt::on_mqtt_disconnected()
 {
     connected_ = false;
     ESP_LOGW(TAG, "MQTT disconnected");
+}
+
+// ---------------------------------------------------------------------------
+// Downlink command queue (step 4c)
+// ---------------------------------------------------------------------------
+
+void HaspMqtt::enqueue_command(const char* subtopic, const char* payload, int payload_len)
+{
+    if (!cmd_queue_) return;
+    if (!subtopic) subtopic = "";
+    if (!payload || payload_len < 0) { payload = ""; payload_len = 0; }
+
+    mqtt_cmd_msg_t msg = {};
+    size_t tlen = strlen(subtopic);
+    msg.topic   = (char*)malloc(tlen + 1);
+    msg.payload = (char*)malloc((size_t)payload_len + 1);
+    if (!msg.topic || !msg.payload) {
+        free(msg.topic);
+        free(msg.payload);
+        ESP_LOGE(TAG, "enqueue oom (topic=%s len=%d)", subtopic, payload_len);
+        return;
+    }
+    memcpy(msg.topic, subtopic, tlen);
+    msg.topic[tlen] = '\0';
+    memcpy(msg.payload, payload, payload_len);
+    msg.payload[payload_len] = '\0';
+
+    // Non-blocking send. If the queue is full (drainer starved), drop the
+    // OLDEST entry to make room — S3 blocks up to 500ms retrying, but here
+    // we're on the esp-mqtt task which must not stall (heartbeat loss →
+    // reconnect storm). Losing a stale command is preferable.
+    if (xQueueSend(cmd_queue_, &msg, 0) != pdTRUE) {
+        mqtt_cmd_msg_t drop = {};
+        if (xQueueReceive(cmd_queue_, &drop, 0) == pdTRUE) {
+            ESP_LOGW(TAG, "cmd queue full, dropped oldest %s", drop.topic);
+            free(drop.topic);
+            free(drop.payload);
+        }
+        if (xQueueSend(cmd_queue_, &msg, 0) != pdTRUE) {
+            free(msg.topic);
+            free(msg.payload);
+            ESP_LOGE(TAG, "cmd queue send failed");
+        }
+    }
+}
+
+// Drainer — call from LVGL task (lv_timer). Reconstructs a text command
+// line and hands it to hasp_dispatch_command:
+//   subtopic == ""              → payload as-is (e.g. "page 2", "{...}", "[...]")
+//   subtopic contains '.'       → "<subtopic>=<payload>"  (attribute set,
+//                                  e.g. "p1b2.text=Hello")
+//   subtopic otherwise          → "<subtopic> <payload>"  (verb form,
+//                                  e.g. "page 2")
+// hasp_dispatch_command already splits on the first '=' or ' ' (S3 line
+// 404-420), so both forms round-trip through the same code path used by
+// the local text-command tests in main.cpp.
+int HaspMqtt::drain_command_queue()
+{
+    if (!cmd_queue_) return 0;
+
+    int dispatched = 0;
+    mqtt_cmd_msg_t msg;
+    while (xQueueReceive(cmd_queue_, &msg, 0) == pdTRUE) {
+        const char* subtopic = msg.topic ? msg.topic : "";
+        const char* payload  = msg.payload ? msg.payload : "";
+
+        ESP_LOGI(TAG, "cmd rx  topic='%s'  payload='%s'", subtopic, payload);
+
+        if (subtopic[0] == '\0') {
+            hasp_dispatch_command(payload);
+        } else {
+            size_t sn = strlen(subtopic);
+            size_t pn = strlen(payload);
+            std::string line;
+            line.reserve(sn + 1 + pn);
+            line.assign(subtopic, sn);
+            line.push_back(strchr(subtopic, '.') ? '=' : ' ');
+            line.append(payload, pn);
+            hasp_dispatch_command(line.c_str());
+        }
+
+        free(msg.topic);
+        free(msg.payload);
+        dispatched++;
+    }
+    return dispatched;
+}
+
+extern "C" int hasp_mqtt_process_incoming(void)
+{
+    HaspMqtt* self = s_instance;
+    if (!self) return 0;
+    return self->drain_command_queue();
 }
